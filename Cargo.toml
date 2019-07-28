@@ -1,0 +1,4 @@
+[workspace]
+members = [
+    "flo_script"
+]

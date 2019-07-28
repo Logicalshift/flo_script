@@ -1,0 +1,7 @@
+[package]
+name        = "gluepad"
+version     = "0.1.0"
+authors     = ["Andrew Hunter <andrew@logicalshift.co.uk>"]
+edition     = "2018"
+
+[dependencies]
