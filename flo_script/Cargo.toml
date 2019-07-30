@@ -5,3 +5,4 @@ authors     = ["Andrew Hunter <andrew@logicalshift.co.uk>"]
 edition     = "2018"
 
 [dependencies]
+futures     = "0.1"
