@@ -11,6 +11,9 @@ pub enum ScriptEdit {
     /// Removes all inputs and scripts from the editor
     Clear,
 
+    /// Remove the current definition of a single symbol from the editor
+    UndefineSymbol(FloScriptSymbol),
+
     /// Sets the name of a particular symbol to the specified string
     SetName(FloScriptSymbol, String),
 
@@ -28,7 +31,7 @@ pub enum ScriptEdit {
 ///
 /// The script editor provides a way to change and update a script notebook.
 ///
-pub trait FloScriptEditor {
+pub trait FloScriptEditor : Send+Sync {
     ///
     /// Waits for edits from the specified stream and performs them as they arrive. Returns a future that indicates when the stream
     /// has been consumed.
