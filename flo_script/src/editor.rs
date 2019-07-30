@@ -1,6 +1,6 @@
 use super::symbol::*;
 
-use futures::Stream;
+use futures::*;
 use std::any::*;
 
 ///
@@ -30,7 +30,11 @@ pub enum ScriptEdit {
 ///
 pub trait FloScriptEditor {
     ///
-    /// Waits for edits from the specified stream and performs them as they arrive
+    /// Waits for edits from the specified stream and performs them as they arrive. Returns a future that indicates when the stream
+    /// has been consumed.
+    /// 
+    /// Multiple edits can be sent at once to the script editor if needed: if this occurs, the streams are multiplexed and they are
+    /// performed in any order.
     ///
-    fn receive_edits<Edits: Stream<Item=ScriptEdit, Error=()>>(edits: Edits);
+    fn send_edits<Edits: Stream<Item=ScriptEdit, Error=()>>(&self, edits: Edits) -> Box<dyn Future<Item=(), Error=()>>;
 }
