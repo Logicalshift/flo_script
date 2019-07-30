@@ -18,7 +18,11 @@ pub enum ScriptEdit {
     SetInputType(FloScriptSymbol, TypeId),
 
     /// Specifies that a particular symbol is used as a script, and the contents of the script that it should evaluate
-    SetScript(FloScriptSymbol, String)
+    SetScript(FloScriptSymbol, String),
+
+    /// Performs one or more edits in a namespace (names declared in this namespace are only visible from scripts that are
+    /// also in that namespace)
+    WithNamespace(FloScriptSymbol, Vec<ScriptEdit>)
 }
 
 ///
