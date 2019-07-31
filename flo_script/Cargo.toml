@@ -6,3 +6,5 @@ edition     = "2018"
 
 [dependencies]
 futures     = "0.1"
+gluon       = "0.12"
+desync      = "0.4"
