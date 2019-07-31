@@ -1,3 +1,5 @@
+use super::editor::*;
+
 use gluon::*;
 
 ///
@@ -18,5 +20,12 @@ impl GluonScriptHostCore {
         let root_thread = new_vm();
 
         GluonScriptHostCore { root_thread }
+    }
+
+    ///
+    /// Performs an edit action on this core
+    ///
+    pub fn edit(&mut self, edit: GluonScriptEdit) {
+
     }
 }

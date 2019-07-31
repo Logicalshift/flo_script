@@ -39,5 +39,5 @@ pub trait FloScriptEditor : Send+Sync {
     /// Multiple edits can be sent at once to the script editor if needed: if this occurs, the streams are multiplexed and they are
     /// performed in any order.
     ///
-    fn send_edits<Edits: Stream<Item=ScriptEdit, Error=()>>(&self, edits: Edits) -> Box<dyn Future<Item=(), Error=()>>;
+    fn send_edits<Edits: 'static+Send+Stream<Item=ScriptEdit, Error=()>>(&self, edits: Edits) -> Box<dyn Future<Item=(), Error=()>>;
 }
