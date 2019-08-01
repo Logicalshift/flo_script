@@ -13,12 +13,12 @@ pub trait FloScriptHost : Send+Sync {
     /// 
     /// The notebook can be used to attach input streams to input symbols and retrieve output streams from scripts.
     /// 
-    fn notebook<'a>(&'a self) -> &'a Self::Notebook;
+    fn notebook(&self) -> Self::Notebook;
 
     ///
     /// Retrieves the editor for this host
     /// 
     /// The editor can be used to define input symbols, scripts and namespaces
     /// 
-    fn editor<'a>(&'a self) -> &'a Self::Editor;
+    fn editor(&self) -> Self::Editor;
 }

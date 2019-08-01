@@ -34,7 +34,7 @@ pub enum NotebookUpdate {
 ///
 pub trait FloScriptNotebook : Send+Sync {
     /// The type of the stream used to receive updates from this notebook
-    type UpdateStream  : Stream<Item=NotebookUpdate, Error=()>;
+    type UpdateStream  : Stream<Item=NotebookUpdate, Error=()>+Send;
 
     /// Retrieves a stream of updates for this notebook
     fn updates(&self) -> Self::UpdateStream;
