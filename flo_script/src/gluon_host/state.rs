@@ -1,10 +1,74 @@
 use gluon::{RootedThread, Thread};
 use gluon_vm::{ExternModule, Result};
-use gluon_vm::api::{FunctionRef, OpaqueValue};
+use gluon_vm::api::{FunctionRef, OpaqueValue, UserdataValue};
 use gluon_vm::api::generic::{A, B};
+
+use std::iter;
+use std::sync::*;
+use std::collections::HashSet;
 
 type ValueA = OpaqueValue<RootedThread, A>;
 type ValueB = OpaqueValue<RootedThread, B>;
+
+///
+/// Structs come with some user data
+///
+#[derive(Clone, Debug, Trace, Userdata)]
+#[gluon_trace(skip)]
+struct StateDependencies {
+    dependencies: Arc<HashSet<u64>>
+}
+
+impl StateDependencies {
+    ///
+    /// Creates a new (empty) state dependencies structure
+    ///
+    fn new() -> StateDependencies {
+        StateDependencies {
+            dependencies: Arc::new(HashSet::new())
+        }
+    }
+
+    ///
+    /// Creates a new state dependencies structure containing a single dependency ID
+    ///
+    fn with_dependency(dependency: u64) -> StateDependencies {
+        StateDependencies {
+            dependencies: Arc::new(iter::once(dependency).collect())
+        }
+    }
+
+    ///
+    /// Merge these dependencies with the dependencies from another state
+    ///
+    fn merge_with(&mut self, merge_with: &StateDependencies) {
+        if merge_with.dependencies.len() == 0 {
+            // Nothing to do
+        } else if self.dependencies.len() == 0 {
+            // Just take the dependencies from the other side
+            self.dependencies = Arc::clone(&merge_with.dependencies);
+        } else {
+            // Create a new dependencies collection
+            self.dependencies = if self.dependencies.len() < merge_with.dependencies.len() {
+                // Clone the larger dependency set, then insert from the smaller
+                let mut new_dependencies = (*merge_with.dependencies).clone();
+                for dep in self.dependencies.iter() {
+                    new_dependencies.insert(*dep);
+                }
+
+                Arc::new(new_dependencies)
+            } else {
+                // Clone the larger dependency set, then insert from the smaller
+                let mut new_dependencies = (*self.dependencies).clone();
+                for dep in merge_with.dependencies.iter() {
+                    new_dependencies.insert(*dep);
+                }
+
+                Arc::new(new_dependencies)
+            }
+        }
+    }
+}
 
 ///
 /// Monad representing a state value
@@ -16,7 +80,10 @@ type ValueB = OpaqueValue<RootedThread, B>;
 #[gluon(vm_type = "flo.state.State")]
 pub struct State<TValue> {
     /// The value of this state
-    value: TValue
+    value: TValue,
+
+    // User data for this state
+    dependencies: UserdataValue<StateDependencies>
 }
 
 impl<TValue> State<TValue> {
@@ -25,8 +92,33 @@ impl<TValue> State<TValue> {
     ///
     pub fn new(value: TValue) -> State<TValue> {
         State { 
-            value: value
+            value:          value,
+            dependencies:   UserdataValue(StateDependencies::new())
         }
+    }
+
+    ///
+    /// Creates a new state with a single dependency
+    ///
+    pub fn with_dependency(value: TValue, dependency: u64) -> State<TValue> {
+        State { 
+            value:          value,
+            dependencies:   UserdataValue(StateDependencies::with_dependency(dependency))
+        }        
+    }
+
+    ///
+    /// Merges the dependencies from another state to update this state
+    ///
+    fn merge_dependencies(self, merge_with: UserdataValue<StateDependencies>) -> State<TValue> {
+        let mut new_state = self;
+
+        let UserdataValue(ref mut our_dependencies) = new_state.dependencies;
+        let UserdataValue(merge_with)               = merge_with;
+
+        our_dependencies.merge_with(&merge_with);
+
+        new_state
     }
 }
 
@@ -35,9 +127,10 @@ impl<TValue> State<TValue> {
 ///
 fn flat_map(mut a: FunctionRef<fn(ValueA) -> State<ValueB>>, b: State<ValueA>) -> State<ValueB> {
     let value_a = b.value;
+    let deps_a  = b.dependencies;
     let value_b = a.call(value_a).unwrap();
 
-    value_b
+    value_b.merge_dependencies(deps_a)
 }
 
 ///
