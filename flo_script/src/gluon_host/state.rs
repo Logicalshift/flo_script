@@ -19,6 +19,17 @@ pub struct State<TValue> {
     value: TValue
 }
 
+impl<TValue> State<TValue> {
+    ///
+    /// Creates a new state that is not dependent on any input states
+    ///
+    pub fn new(value: TValue) -> State<TValue> {
+        State { 
+            value: value
+        }
+    }
+}
+
 ///
 /// Implementation of flat_map for the State monad
 ///
@@ -30,12 +41,20 @@ fn flat_map(mut a: FunctionRef<fn(ValueA) -> State<ValueB>>, b: State<ValueA>) -
 }
 
 ///
+/// Wraps a value in a new state
+///
+fn wrap(a: ValueA) -> State<ValueA> {
+    State::new(a)
+}
+
+///
 /// Generates the flo.state extern module for a Gluon VM
 ///
 pub fn load(vm: &Thread) -> Result<ExternModule> {
     ExternModule::new(vm, record! {
-        type flo::state::State a => State<A>,
+        type flo::state::State a    => State<A>,
 
-        flat_map => primitive!(2, flat_map)
+        wrap                        => primitive!(1, wrap),
+        flat_map                    => primitive!(2, flat_map)
     })
 }
