@@ -11,7 +11,7 @@ lazy_static! {
 ///
 /// An abstract representation of a symbol in a script
 ///
-#[derive(Copy, Clone, PartialEq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FloScriptSymbol {
     /// The ID set for this symbol
     id: u64

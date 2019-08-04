@@ -1,3 +1,5 @@
+use super::super::symbol::*;
+
 use gluon::{RootedThread, Thread};
 use gluon_vm::{ExternModule, Result};
 use gluon_vm::api::{FunctionRef, OpaqueValue, UserdataValue};
@@ -16,7 +18,7 @@ type ValueB = OpaqueValue<RootedThread, B>;
 #[derive(Clone, Debug, Trace, Userdata)]
 #[gluon_trace(skip)]
 struct StateDependencies {
-    dependencies: Arc<HashSet<u64>>
+    dependencies: Arc<HashSet<FloScriptSymbol>>
 }
 
 impl StateDependencies {
@@ -32,7 +34,7 @@ impl StateDependencies {
     ///
     /// Creates a new state dependencies structure containing a single dependency ID
     ///
-    fn with_dependency(dependency: u64) -> StateDependencies {
+    fn with_dependency(dependency: FloScriptSymbol) -> StateDependencies {
         StateDependencies {
             dependencies: Arc::new(iter::once(dependency).collect())
         }
@@ -73,8 +75,8 @@ impl StateDependencies {
 ///
 /// Monad representing a state value
 /// 
-/// When state values are requested from the environment, we remember what was requested so we know to
-/// re-evaluate the expression when the state changes
+/// A state value carries along with the symbols that were read from. We use this later on to decide
+/// what to re-evaluate when new data arrives via an input stream.
 ///
 #[derive(VmType, Getable, Pushable)]
 #[gluon(vm_type = "flo.state.State")]
@@ -100,7 +102,7 @@ impl<TValue> State<TValue> {
     ///
     /// Creates a new state with a single dependency
     ///
-    pub fn with_dependency(value: TValue, dependency: u64) -> State<TValue> {
+    pub fn with_dependency(value: TValue, dependency: FloScriptSymbol) -> State<TValue> {
         State { 
             value:          value,
             dependencies:   UserdataValue(StateDependencies::with_dependency(dependency))
