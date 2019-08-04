@@ -1,4 +1,5 @@
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate gluon_vm;
 
 mod symbol;
 mod editor;
