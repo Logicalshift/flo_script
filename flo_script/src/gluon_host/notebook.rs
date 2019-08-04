@@ -44,7 +44,7 @@ impl FloScriptNotebook for GluonScriptNotebook {
     }
 
     /// Attaches an input stream to an input symbol. This will replace any existing input stream for that symbol if there is one.
-    fn attach_input<InputStream: Stream<Error=()>>(&self, symbol: FloScriptSymbol, input: InputStream) {
+    fn attach_input<InputItem: Clone, InputStream: Stream<Item=InputItem, Error=()>>(&self, symbol: FloScriptSymbol, input: InputStream) {
         unimplemented!()
     }
 
