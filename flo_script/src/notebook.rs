@@ -9,9 +9,6 @@ use std::any::*;
 ///
 #[derive(Clone, PartialEq, Debug)]
 pub enum NotebookUpdate {
-    /// Reports the name that has been assigned to a symbol in this notebook
-    AssignedNameToSymbol(FloScriptSymbol, String),
-
     /// A symbol has been specified to define a namespace
     DefinedNamespaceSymbol(FloScriptSymbol),
 

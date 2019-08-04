@@ -14,9 +14,6 @@ pub enum ScriptEdit {
     /// Remove the current definition of a single symbol from the editor
     UndefineSymbol(FloScriptSymbol),
 
-    /// Sets the name of a particular symbol to the specified string
-    SetName(FloScriptSymbol, String),
-
     /// Specifies that a particular symbol is used for input and receives values of the specified type 
     SetInputType(FloScriptSymbol, TypeId),
 
