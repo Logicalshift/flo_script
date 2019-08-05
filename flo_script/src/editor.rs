@@ -1,6 +1,9 @@
 use super::symbol::*;
 
 use futures::*;
+use futures::stream;
+use futures::executor;
+
 use std::any::*;
 
 ///
@@ -53,4 +56,39 @@ pub trait FloScriptEditor : Send+Sync {
     /// performed in any order.
     ///
     fn send_edits<Edits: 'static+Send+Stream<Item=ScriptEdit, Error=()>>(&self, edits: Edits) -> Box<dyn Future<Item=(), Error=()>>;
+
+    ///
+    /// Sends a single edit to a script editor
+    ///
+    fn edit(&self, edit: ScriptEdit) {
+        let edit        = stream::once(Ok(edit));
+        let edit_task   = self.send_edits(edit);
+
+        executor::spawn(edit_task).wait_future().unwrap();
+    }
+
+    ///
+    /// Removes all scripts from the editor
+    ///
+    fn clear(&self) { self.edit(ScriptEdit::Clear); }
+
+    ///
+    /// Marks a symbol that has previously been declared as an input or an output symbol as undefined
+    ///
+    fn undefine_symbol(&self, symbol: FloScriptSymbol) { self.edit(ScriptEdit::UndefineSymbol(symbol)); }
+
+    ///
+    /// Sets the type of the data sent to a particular input symbol
+    ///
+    fn set_input_type<InputType: 'static>(&self, input_symbol: FloScriptSymbol) { self.edit(ScriptEdit::SetInputType(input_symbol, TypeId::of::<InputType>())); }
+
+    ///
+    /// Defines a streaming script, which will produce an output stream on the specified symbol
+    ///
+    fn set_streaming_script(&self, output_symbol: FloScriptSymbol, script: &str) { self.edit(ScriptEdit::SetStreamingScript(output_symbol, String::from(script))); }
+
+    ///
+    /// Defines a state computing script which will produce an output stream on the specified symbol
+    ///
+    fn set_computing_script(&self, output_symbol: FloScriptSymbol, script: &str) { self.edit(ScriptEdit::SetComputingScript(output_symbol, String::from(script))); }
 }
