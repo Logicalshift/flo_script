@@ -16,7 +16,7 @@ fn update_from_state_stream() {
 
     // 'x' is an input state stream, 'y' is a state that adds one to the current state of 'x'
     let edits               = vec![
-        ScriptEdit::Clear,
+        //ScriptEdit::Clear,
         ScriptEdit::SetInputType(input_x, TypeId::of::<i32>()),
         ScriptEdit::SetComputingScript(output_y, String::from(r#"
             let state = import! flo.script.state
