@@ -1,5 +1,6 @@
 use super::editor::*;
 use super::core_namespace::*;
+use super::super::editor::*;
 
 ///
 /// Core of a script host that targets the Gluon scripting language
@@ -27,6 +28,18 @@ impl GluonScriptHostCore {
     /// Perform an edit on a namespace
     ///
     fn edit_namespace(namespace: &mut GluonScriptNamespace, edit: GluonScriptEdit) {
+        use self::GluonScriptEdit::*;
+        use self::ScriptEdit::*;
+
+        match edit {
+            ScriptEdit(Clear)                                   => { unimplemented!() }
+            ScriptEdit(UndefineSymbol(symbol))                  => { unimplemented!() }
+            ScriptEdit(SetInputType(symbol, input_type))        => { unimplemented!() }
+            ScriptEdit(SetStreamingScript(symbol, script_src))  => { unimplemented!() }
+            ScriptEdit(SetComputingScript(symbol, script_src))  => { unimplemented!() }
+            SetRunIo(run_io)                                    => { unimplemented!() }
+            ScriptEdit(WithNamespace(symbol, edits))            => { unimplemented!() }
+        }
     }
 
     ///
