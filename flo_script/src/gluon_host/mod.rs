@@ -1,4 +1,5 @@
 mod core;
+mod core_namespace;
 mod host;
 mod editor;
 mod notebook;
