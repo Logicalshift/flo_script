@@ -1,4 +1,5 @@
 use super::core::*;
+use super::super::error::*;
 use super::super::symbol::*;
 use super::super::notebook::*;
 
@@ -39,12 +40,12 @@ impl FloScriptNotebook for GluonScriptNotebook {
     }
 
     /// Attaches an input stream to an input symbol. This will replace any existing input stream for that symbol if there is one.
-    fn attach_input<InputItem: Clone, InputStream: Stream<Item=InputItem, Error=()>>(&self, symbol: FloScriptSymbol, input: InputStream) {
+    fn attach_input<InputItem: Clone, InputStream: Stream<Item=InputItem, Error=()>>(&self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()> {
         unimplemented!()
     }
 
     /// Creates an output stream to receive the results from a script associated with the specified symbol
-    fn receive_output<OutputItem>(&self, symbol: FloScriptSymbol) -> Box<dyn Stream<Item=OutputItem, Error=()>> {
+    fn receive_output<OutputItem>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>>> {
         unimplemented!()
     }
 }

@@ -44,8 +44,8 @@ pub trait FloScriptNotebook : Send+Sync {
     fn namespace<'a>(&'a self, symbol: FloScriptSymbol) -> Option<&'a Self>;
 
     /// Attaches an input stream to an input symbol. This will replace any existing input stream for that symbol if there is one.
-    fn attach_input<InputItem: Clone, InputStream: Stream<Item=InputItem, Error=()>>(&self, symbol: FloScriptSymbol, input: InputStream);
+    fn attach_input<InputItem: Clone, InputStream: Stream<Item=InputItem, Error=()>>(&self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()>;
 
     /// Creates an output stream to receive the results from a script associated with the specified symbol
-    fn receive_output<OutputItem: Clone>(&self, symbol: FloScriptSymbol) -> Box<dyn Stream<Item=OutputItem, Error=()>>;
+    fn receive_output<OutputItem: Clone>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>>>;
 }

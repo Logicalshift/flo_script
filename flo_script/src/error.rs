@@ -13,4 +13,4 @@ pub enum FloScriptError {
 }
 
 /// Result from a script operation
-type FloScriptResult<T> = Result<T, FloScriptError>;
+pub type FloScriptResult<T> = Result<T, FloScriptError>;
