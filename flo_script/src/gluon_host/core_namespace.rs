@@ -1,7 +1,9 @@
 use super::super::streams::*;
 use super::super::symbol::*;
+use super::super::error::*;
 
 use gluon::*;
+use futures::*;
 
 use std::any::*;
 use std::collections::HashMap;
@@ -55,5 +57,17 @@ impl GluonScriptNamespace {
         let source = InputStreamSource::new(input_stream_type);
 
         self.symbols.insert(symbol, SymbolDefinition::Input(source));
+    }
+
+    ///
+    /// Creates a stream to read from a particular symbol
+    ///
+    pub fn read_stream<Symbol: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<Stream<Item=Symbol, Error=()>+Send>> {
+        use self::SymbolDefinition::*;
+
+        match self.symbols.get(&symbol) {
+            None                        => Err(FloScriptError::UndefinedSymbol(symbol)),
+            Some(Input(input_source))   => Ok(Box::new(input_source.read()?))
+        }
     }
 }

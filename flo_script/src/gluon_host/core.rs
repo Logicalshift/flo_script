@@ -1,6 +1,10 @@
 use super::editor::*;
 use super::core_namespace::*;
+use super::super::error::*;
+use super::super::symbol::*;
 use super::super::editor::*;
+
+use futures::*;
 
 ///
 /// Core of a script host that targets the Gluon scripting language
@@ -47,5 +51,12 @@ impl GluonScriptHostCore {
     ///
     pub fn edit(&mut self, edit: GluonScriptEdit) {
         Self::edit_namespace(&mut self.root_namespace, edit)
+    }
+
+    ///
+    /// Creates a stream to read from a particular symbol
+    ///
+    pub fn read_stream<Symbol: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<Stream<Item=Symbol, Error=()>+Send>> {
+        self.root_namespace.read_stream(symbol)
     }
 }
