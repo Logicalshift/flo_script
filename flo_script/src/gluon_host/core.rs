@@ -32,13 +32,13 @@ impl GluonScriptHostCore {
         use self::ScriptEdit::*;
 
         match edit {
-            ScriptEdit(Clear)                                   => { unimplemented!() }
-            ScriptEdit(UndefineSymbol(symbol))                  => { unimplemented!() }
-            ScriptEdit(SetInputType(symbol, input_type))        => { unimplemented!() }
-            ScriptEdit(SetStreamingScript(symbol, script_src))  => { unimplemented!() }
-            ScriptEdit(SetComputingScript(symbol, script_src))  => { unimplemented!() }
-            SetRunIo(run_io)                                    => { unimplemented!() }
-            ScriptEdit(WithNamespace(symbol, edits))            => { unimplemented!() }
+            ScriptEdit(Clear)                                   => { namespace.clear(); }
+            ScriptEdit(UndefineSymbol(symbol))                  => { unimplemented!("UndefineSymbol") }
+            ScriptEdit(SetInputType(symbol, input_type))        => { namespace.define_input_symbol(symbol, input_type); }
+            ScriptEdit(SetStreamingScript(symbol, script_src))  => { unimplemented!("SetStreamingScript") }
+            ScriptEdit(SetComputingScript(symbol, script_src))  => { unimplemented!("SetComputingScript") }
+            SetRunIo(run_io)                                    => { unimplemented!("SetRunIo") }
+            ScriptEdit(WithNamespace(symbol, edits))            => { unimplemented!("WithNamespace") }
         }
     }
 
