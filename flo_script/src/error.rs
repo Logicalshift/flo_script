@@ -3,6 +3,7 @@ use std::result::Result;
 ///
 /// Possible errors from a script call
 ///
+#[derive(Clone, PartialEq, Debug)]
 pub enum FloScriptError {
     /// Requested an output or an input with the wrong type
     IncorrectType,

@@ -1,3 +1,4 @@
+use super::error::*;
 use super::symbol::*;
 
 use futures::*;
@@ -17,6 +18,9 @@ pub enum NotebookUpdate {
 
     /// A symbol has been specified as an output symbol, providing data of the specified type
     DefinedOutputSymbol(FloScriptSymbol, TypeId),
+
+    /// An output symbol was added but it could not be defined due to an error
+    OutputSymbolError(FloScriptSymbol, FloScriptError),
 
     /// A series of updates has been performed in a particular namespace
     WithNamespace(FloScriptSymbol, Vec<NotebookUpdate>),
