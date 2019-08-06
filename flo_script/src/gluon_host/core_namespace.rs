@@ -70,4 +70,18 @@ impl GluonScriptNamespace {
             Some(Input(input_source))   => Ok(Box::new(input_source.read()?))
         }
     }
+
+    ///
+    /// Attaches an input stream to a particular symbol
+    ///
+    pub fn attach_input<InputStream: Stream<Error=()>>(&self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()> 
+    where InputStream::Item: 'static+Clone+Send {
+        use self::SymbolDefinition::*;
+
+        match self.symbols.get(&symbol) {
+            None                        => Err(FloScriptError::UndefinedSymbol(symbol)),
+            Some(Input(input_source))   => input_source.attach(input),
+            _                           => Err(FloScriptError::NotAnInputSymbol)
+        }
+    }
 }

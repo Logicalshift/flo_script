@@ -1,6 +1,8 @@
 use super::input_stream::*;
 use super::super::error::*;
 
+use futures::*;
+
 use std::any::*;
 
 ///
@@ -23,9 +25,17 @@ impl InputStreamSource {
     }
 
     ///
+    /// Sets the stream that's attached to this script input
+    ///
+    pub fn attach<SymbolStream: Stream<Error=()>>(&self, input_stream: SymbolStream) -> FloScriptResult<()>
+    where SymbolStream::Item: 'static+Clone+Send {
+        unimplemented!("Input stream source attach")
+    } 
+
+    ///
     /// Creates a new stream reader for this input source
     ///
-    pub fn read<SymbolType: 'static+Clone>(&self) -> FloScriptResult<InputStream<SymbolType>> {
+    pub fn read<SymbolType: 'static+Clone+Send>(&self) -> FloScriptResult<InputStream<SymbolType>> {
         // Can only request the defined type of this input stream
         if TypeId::of::<SymbolType>() != self.input_symbol_type {
             return Err(FloScriptError::IncorrectType)

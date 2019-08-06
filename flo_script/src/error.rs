@@ -13,6 +13,9 @@ pub enum FloScriptError {
     /// A requested symbol was not defined
     UndefinedSymbol(FloScriptSymbol),
 
+    /// Tried to attach an input stream to a symbol that is not defined as an input symbol
+    NotAnInputSymbol,
+
     /// Requested an output or an input with the wrong type
     IncorrectType,
 
