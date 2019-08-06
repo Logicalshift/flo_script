@@ -33,11 +33,6 @@ impl FloScriptNotebook for GluonScriptNotebook {
         unimplemented!()
     }
 
-    /// Retrieves the symbol associated with the specified name, if there is one
-    fn symbol_with_name(&self, name: &str) -> Option<FloScriptSymbol> {
-        unimplemented!()
-    }
-
     /// Retrieves a notebook containing the symbols in the specified namespace
     fn namespace<'a>(&'a self, symbol: FloScriptSymbol) -> Option<&'a Self> {
         unimplemented!()

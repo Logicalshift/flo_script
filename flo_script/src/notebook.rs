@@ -40,9 +40,6 @@ pub trait FloScriptNotebook : Send+Sync {
     /// Retrieves a stream of updates for this notebook
     fn updates(&self) -> Self::UpdateStream;
 
-    /// Retrieves the symbol associated with the specified name, if there is one
-    fn symbol_with_name(&self, name: &str) -> Option<FloScriptSymbol>;
-
     /// Retrieves a notebook containing the symbols in the specified namespace
     fn namespace<'a>(&'a self, symbol: FloScriptSymbol) -> Option<&'a Self>;
 
