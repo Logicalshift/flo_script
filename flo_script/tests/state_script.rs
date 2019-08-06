@@ -24,10 +24,10 @@ fn update_from_state_stream() {
         "#);
 
     // Get the stream from our state
-    let mut output_stream   = executor::spawn(host.notebook().receive_output::<i32>(output_y));
+    let mut output_stream   = executor::spawn(host.notebook().receive_output::<i32>(output_y).expect("output stream"));
 
     // Send a state update
-    host.notebook().attach_input(input_x, stream::iter_ok(vec![3]));
+    host.notebook().attach_input(input_x, stream::iter_ok(vec![3])).expect("attached input");
 
     // Should receive a state update of '4' for our output state
     let next_state_y        = output_stream.wait_stream().expect("at least one update").expect("no errors");

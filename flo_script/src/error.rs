@@ -1,3 +1,5 @@
+use super::symbol::*;
+
 use std::result::Result;
 
 ///
@@ -5,8 +7,11 @@ use std::result::Result;
 ///
 #[derive(Clone, PartialEq, Debug)]
 pub enum FloScriptError {
-    /// The requested feature is not availble (with description)
+    /// The requested feature is not available (with description as to why)
     Unavailable(String),
+
+    /// A requested symbol was not defined
+    UndefinedSymbol(FloScriptSymbol),
 
     /// Requested an output or an input with the wrong type
     IncorrectType,
