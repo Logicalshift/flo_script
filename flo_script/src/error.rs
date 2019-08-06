@@ -5,6 +5,9 @@ use std::result::Result;
 ///
 #[derive(Clone, PartialEq, Debug)]
 pub enum FloScriptError {
+    /// The requested feature is not availble (with description)
+    Unavailable(String),
+
     /// Requested an output or an input with the wrong type
     IncorrectType,
 

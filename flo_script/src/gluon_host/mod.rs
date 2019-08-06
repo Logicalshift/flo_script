@@ -4,8 +4,7 @@ mod host;
 mod editor;
 mod notebook;
 mod state;
-mod input_stream;
 
-pub use host::*;
-pub use editor::*;
-pub use notebook::*;
+pub use self::host::*;
+pub use self::editor::*;
+pub use self::notebook::*;

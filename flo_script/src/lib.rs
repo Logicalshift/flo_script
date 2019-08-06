@@ -15,3 +15,4 @@ pub use self::host::*;
 pub use self::error::*;
 
 pub mod gluon_host;
+pub mod streams;
