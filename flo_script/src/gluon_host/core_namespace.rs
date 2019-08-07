@@ -62,10 +62,10 @@ impl GluonScriptNamespace {
     ///
     /// Creates a stream to read from a particular symbol
     ///
-    pub fn read_stream<Symbol: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> {
+    pub fn read_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> {
         use self::SymbolDefinition::*;
 
-        match self.symbols.get(&symbol) {
+        match self.symbols.get_mut(&symbol) {
             None                        => Err(FloScriptError::UndefinedSymbol(symbol)),
             Some(Input(input_source))   => Ok(Box::new(input_source.read()?))
         }
@@ -74,11 +74,11 @@ impl GluonScriptNamespace {
     ///
     /// Attaches an input stream to a particular symbol
     ///
-    pub fn attach_input<InputStream: Stream<Error=()>>(&self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()> 
+    pub fn attach_input<InputStream: 'static+Stream<Error=()>+Send>(&mut self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()> 
     where InputStream::Item: 'static+Clone+Send {
         use self::SymbolDefinition::*;
 
-        match self.symbols.get(&symbol) {
+        match self.symbols.get_mut(&symbol) {
             None                        => Err(FloScriptError::UndefinedSymbol(symbol)),
             Some(Input(input_source))   => input_source.attach(input),
             _                           => Err(FloScriptError::NotAnInputSymbol)

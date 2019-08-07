@@ -56,14 +56,14 @@ impl GluonScriptHostCore {
     ///
     /// Creates a stream to read from a particular symbol
     ///
-    pub fn read_stream<Symbol: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> {
+    pub fn read_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> {
         self.root_namespace.read_stream(symbol)
     }
 
     ///
     /// Attaches an input stream to a particular symbol
     ///
-    pub fn attach_input<InputStream: Stream<Error=()>>(&self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()> 
+    pub fn attach_input<InputStream: 'static+Stream<Error=()>+Send>(&mut self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()> 
     where InputStream::Item: 'static+Clone+Send {
         self.root_namespace.attach_input(symbol, input)
     }
