@@ -1,6 +1,7 @@
 use super::input_stream_core::*;
 
 use futures::*;
+use futures::task;
 use desync::Desync;
 
 use std::sync::*;
@@ -43,6 +44,8 @@ impl<Symbol: 'static+Clone+Send, Source: 'static+Send+Stream<Item=Symbol, Error=
     type Error  = ();
 
     fn poll(&mut self) -> Poll<Option<Symbol>, ()> {
-        self.core.sync(|core| core.poll_stream(self.stream_id))
+        // It's necessary to get the task here as the call to the core might end up on another thread
+        let task = task::current();
+        self.core.sync(|core| core.poll_stream(self.stream_id, task))
     }
 }

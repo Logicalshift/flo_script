@@ -135,12 +135,12 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     ///
     /// Polls the stream with a particular ID (from a future or a stream)
     ///
-    pub fn poll_stream(&mut self, stream_id: usize) -> Poll<Option<Symbol>, ()> {
+    pub fn poll_stream(&mut self, stream_id: usize, poll_task: Task) -> Poll<Option<Symbol>, ()> {
         // Clone the stream reference to get around some Rust book-keeping (it assumes all of 'self' is borrowed in the closure if we don't do this)
         let streams = Arc::clone(&self.streams);
 
         // As sync can potentially run on a separate thread, get the active task before acting on the streams
-        let task    = task::current();
+        let task    = poll_task;
 
         streams.sync(|mut streams| {
             // If the stream has buffered data waiting, just return that
