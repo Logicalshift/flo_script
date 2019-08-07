@@ -95,7 +95,11 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     /// Polls the stream with a particular ID (from a future or a stream)
     ///
     pub fn poll_stream(&mut self, stream_id: usize) -> Poll<Option<Symbol>, ()> {
+        // Clone the stream reference to get around some Rust book-keeping (it assumes all of 'self' is borrowed in the closure if we don't do this)
         let streams = Arc::clone(&self.streams);
+
+        // As sync can potentially run on a separate thread, get the active task before acting on the streams
+        let task    = task::current();
 
         streams.sync(|streams| {
             // If the stream has buffered data waiting, just return that
@@ -111,7 +115,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
 
             // Stall if any streams have a full buffer
             if streams.values().any(|stream| stream.buffer.len() >= self.max_buffer_size) {
-                streams.get_mut(&stream_id).map(|stream| stream.ready = Some(task::current()));
+                streams.get_mut(&stream_id).map(|stream| stream.ready = Some(task));
                 return Ok(Async::NotReady);
             }
 
@@ -134,6 +138,17 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
                             }
                         });
 
+                        // Wake all of the other streams so they read their buffered value (if there's only one stream, there's nothing to wake)
+                        if streams.len() > 1 {
+                            self.streams.desync(move |streams| {
+                                streams.iter_mut().for_each(|(id, stream)| {
+                                    if *id != stream_id {
+                                        stream.ready.take().map(|ready| ready.notify());
+                                    }
+                                });
+                            });
+                        }
+
                         Ok(Async::Ready(Some(next_symbol)))
                     },
 
@@ -149,10 +164,8 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
                     },
 
                     Ok(Async::NotReady) => {
-                        // Stream is not ready. Remember the task
-                        stream.ready = Some(task::current());
-
-                        // TODO: When the current task notifies also wake up the other streams
+                        // Stream is not ready. Remember the task so we're woken up if a different stream is the next one to read
+                        stream.ready = Some(task);
 
                         Ok(Async::NotReady)
                     },
