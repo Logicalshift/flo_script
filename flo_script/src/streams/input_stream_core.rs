@@ -92,6 +92,47 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     }
 
     ///
+    /// Drains as many entries as possible from the specified stream to the target streams
+    /// 
+    /// Returns (new_data_available, stream_finished)
+    ///
+    fn drain_stream(stream: &mut Source, buffer_to: &mut HashMap<usize, StreamData<Symbol>>, max_buffer_size: usize) -> (bool, bool) {
+        // Determine the maximum number of symbols to load for the streams
+        let biggest_stream_count    = buffer_to.values().map(|stream_data| stream_data.buffer.len()).max().unwrap_or(0);
+        if biggest_stream_count >= max_buffer_size { return (false, false); }
+        let mut remaining_symbols   = max_buffer_size - biggest_stream_count;
+        let mut received_symbols    = vec![];
+        let mut new_data_available  = false;
+        let mut stream_finished     = false;
+
+        loop {
+            // Stop once any of the receiving streams has a fullybuffer
+            if remaining_symbols <= 0 { break; }
+
+            // Poll for the next symbol until the stream finishes or indicates it's not ready
+            match stream.poll() {
+                Err(())                             => { break; }
+                Ok(Async::NotReady)                 => { break; }
+                Ok(Async::Ready(Some(next_symbol))) => { remaining_symbols -= 1; received_symbols.push(next_symbol); }
+                Ok(Async::Ready(None))              => { stream_finished = true; break; }
+            }
+        }
+
+        if received_symbols.len() > 0 {
+            // Tell the caller that new data is available. It will need to notify all of the streams that are waiting
+            new_data_available = true;
+
+            // Add the received symbols to the buffers
+            buffer_to.values_mut().skip(1)
+                .for_each(|stream_buffer| stream_buffer.buffer.extend(received_symbols.iter().cloned()));
+            buffer_to.values_mut().nth(0)
+                .map(|stream_buffer| stream_buffer.buffer.extend(received_symbols));
+        }
+
+        (new_data_available, stream_finished)
+    }
+
+    ///
     /// Polls the stream with a particular ID (from a future or a stream)
     ///
     pub fn poll_stream(&mut self, stream_id: usize) -> Poll<Option<Symbol>, ()> {
@@ -101,75 +142,50 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
         // As sync can potentially run on a separate thread, get the active task before acting on the streams
         let task    = task::current();
 
-        streams.sync(|streams| {
+        streams.sync(|mut streams| {
             // If the stream has buffered data waiting, just return that
             if let Some(stream) = streams.get_mut(&stream_id) {
                 // Any task for this stream is now invalid
                 stream.ready.take();
 
-                if stream.buffer.len() > 0 {
+                if let Some(next_symbol) = stream.buffer.pop_front() {
                     // Just return straight from the buffer while there is some
-                    return Ok(Async::Ready(Some(stream.buffer.pop_front().unwrap())));
+                    return Ok(Async::Ready(Some(next_symbol)));
                 }
             }
 
-            // Stall if any streams have a full buffer
-            if streams.values().any(|stream| stream.buffer.len() >= self.max_buffer_size) {
-                streams.get_mut(&stream_id).map(|stream| stream.ready = Some(task));
-                return Ok(Async::NotReady);
+            // TODO: only the stream that is being polled will be notified when the source stream has more data available right now
+            // This may block other threads if it does not respond (ideally we should always notify all of the streams when the source stream notifies)
+
+            // Read as many symbols as we can from the source stream and buffer them (this avoids too much round-robin signalling)
+            let (new_data_available, finished) = Self::drain_stream(&mut self.source_stream, &mut streams, self.max_buffer_size);
+
+            // Mark as finished if the source stream is done
+            if finished {
+                self.stream_finished = true;
+            }
+
+            // Wake all of the other streams if new data has been loaded from the source stream
+            if new_data_available {
+                self.streams.desync(move |streams| { 
+                    streams.iter_mut()
+                        .for_each(|(id, stream)| { if *id != stream_id { stream.ready.take().map(|ready| ready.notify()); } }); 
+                });
             }
 
             // Buffer the next symbol
             if let Some(mut stream) = streams.get_mut(&stream_id) {
-                // Reached the end of the stream if stream_finished is true
-                if self.stream_finished {
+                // Try to read the next symbol from the current stream
+                if let Some(next_symbol) = stream.buffer.pop_front() {
+                    return Ok(Async::Ready(Some(next_symbol)));
+                } else if self.stream_finished {
+                    // If the source stream is done and the buffer is empty, then this stream has finished too
                     return Ok(Async::Ready(None));
+                } else {
+                    // If there is nothing in the buffer then we need to wait for the source stream
+                    stream.ready = Some(task);
+                    return Ok(Async::NotReady);
                 }
-
-                // Fetch the next symbol from the stream
-                let next_symbol = self.source_stream.poll();
-
-                return match next_symbol {
-                    Ok(Async::Ready(Some(next_symbol))) => {
-                        // Buffer the next symbol for all of the other streams
-                        streams.iter_mut().for_each(|(id, stream)| {
-                            if *id != stream_id {
-                                stream.buffer.push_back(next_symbol.clone());
-                            }
-                        });
-
-                        // Wake all of the other streams so they read their buffered value (if there's only one stream, there's nothing to wake)
-                        if streams.len() > 1 {
-                            self.streams.desync(move |streams| {
-                                streams.iter_mut().for_each(|(id, stream)| {
-                                    if *id != stream_id {
-                                        stream.ready.take().map(|ready| ready.notify());
-                                    }
-                                });
-                            });
-                        }
-
-                        Ok(Async::Ready(Some(next_symbol)))
-                    },
-
-                    Ok(Async::Ready(None)) => {
-                        // Stream has finished
-                        self.stream_finished = true;
-                        Ok(Async::Ready(None))
-                    }
-
-                    Err(()) => {
-                        // Stream isn't really supposed to produce any errors. We just relay these directly
-                        Err(())
-                    },
-
-                    Ok(Async::NotReady) => {
-                        // Stream is not ready. Remember the task so we're woken up if a different stream is the next one to read
-                        stream.ready = Some(task);
-
-                        Ok(Async::NotReady)
-                    },
-                };
             }
 
             // Streams whose ID doesn't exist return no data
