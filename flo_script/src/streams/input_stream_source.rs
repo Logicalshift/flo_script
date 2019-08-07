@@ -29,6 +29,11 @@ impl InputStreamSource {
     ///
     pub fn attach<SymbolStream: Stream<Error=()>>(&self, input_stream: SymbolStream) -> FloScriptResult<()>
     where SymbolStream::Item: 'static+Clone+Send {
+        // Can only attach the defined type of this input stream
+        if TypeId::of::<SymbolStream::Item>() != self.input_symbol_type {
+            return Err(FloScriptError::IncorrectType)
+        }
+
         unimplemented!("Input stream source attach")
     } 
 

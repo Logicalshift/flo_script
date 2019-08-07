@@ -9,7 +9,7 @@ pub struct InputStream<Symbol> {
     symbol: PhantomData<Symbol>
 }
 
-impl<Symbol: Clone> Stream for InputStream<Symbol> {
+impl<Symbol: Clone+Send> Stream for InputStream<Symbol> {
     type Item   = Symbol;
     type Error  = ();
 
