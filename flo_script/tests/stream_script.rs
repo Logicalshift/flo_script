@@ -24,3 +24,21 @@ pub fn read_input_stream_as_output() {
     assert!(output_x_stream.wait_stream() == Some(Ok(3)));
     assert!(output_x_stream.wait_stream() == None);
 }
+
+#[test]
+fn cannot_read_input_stream_as_wrong_type() {
+    let host                = GluonScriptHost::new();
+    let input_x             = FloScriptSymbol::with_name("x");
+
+    host.editor().set_input_type::<i32>(input_x);
+
+    assert!(host.notebook().receive_output::<u32>(input_x).err().unwrap() == FloScriptError::IncorrectType);
+}
+
+#[test]
+fn cannot_read_missing_input_stream() {
+    let host                = GluonScriptHost::new();
+    let input_x             = FloScriptSymbol::with_name("x");
+
+    assert!(host.notebook().receive_output::<i32>(input_x).err().unwrap() == FloScriptError::UndefinedSymbol(input_x));
+}
