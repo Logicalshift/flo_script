@@ -40,7 +40,7 @@ impl InputStreamSource {
     ///
     /// Creates a new stream reader for this input source
     ///
-    pub fn read<SymbolType: 'static+Clone+Send>(&self) -> FloScriptResult<InputStream<SymbolType>> {
+    pub fn read<SymbolType: 'static+Clone+Send>(&self) -> FloScriptResult<InputStream<SymbolType, Box<dyn Stream<Item=SymbolType, Error=()>+Send>>> {
         // Can only request the defined type of this input stream
         if TypeId::of::<SymbolType>() != self.input_symbol_type {
             return Err(FloScriptError::IncorrectType)

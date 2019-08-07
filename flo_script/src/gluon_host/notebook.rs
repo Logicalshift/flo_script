@@ -27,7 +27,7 @@ impl GluonScriptNotebook {
 
 impl FloScriptNotebook for GluonScriptNotebook {
     /// The type of the stream used to receive updates from this notebook
-    type UpdateStream = Box<Stream<Item=NotebookUpdate, Error=()>+Send>;
+    type UpdateStream = Box<dyn Stream<Item=NotebookUpdate, Error=()>+Send>;
 
     /// Retrieves a stream of updates for this notebook
     fn updates(&self) -> Self::UpdateStream {

@@ -56,7 +56,7 @@ impl GluonScriptHostCore {
     ///
     /// Creates a stream to read from a particular symbol
     ///
-    pub fn read_stream<Symbol: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<Stream<Item=Symbol, Error=()>+Send>> {
+    pub fn read_stream<Symbol: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> {
         self.root_namespace.read_stream(symbol)
     }
 

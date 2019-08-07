@@ -23,8 +23,8 @@ struct StreamData<Symbol> {
 /// The core shared between all streams generated from an input symbol
 ///
 pub struct InputStreamCore<Symbol: Send, Source> {
-    /// The stream that is the source for this core
-    source_stream: Source,
+    /// The stream that is the source for this core (or none if no stream is attached yet)
+    source_stream: Option<Source>,
 
     /// Set to true if the source stream has finished
     stream_finished: bool,
@@ -43,9 +43,9 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     ///
     /// Creates a new input stream core
     ///
-    pub fn new(source: Source) -> InputStreamCore<Symbol, Source> {
+    pub fn new() -> InputStreamCore<Symbol, Source> {
         InputStreamCore {
-            source_stream:      source,
+            source_stream:      None,
             next_stream_id:     0,
             max_buffer_size:    DEFAULT_MAX_BUFFER_SIZE,
             stream_finished:    false,
@@ -58,7 +58,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     ///
     pub fn replace_stream(&mut self, new_stream: Source) {
        // Update the source
-       self.source_stream   = new_stream;
+       self.source_stream   = Some(new_stream);
        self.stream_finished = false;
         
        // Wake all of the streams so they poll the new stream
@@ -158,7 +158,10 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
             // This may block other threads if it does not respond (ideally we should always notify all of the streams when the source stream notifies)
 
             // Read as many symbols as we can from the source stream and buffer them (this avoids too much round-robin signalling)
-            let (new_data_available, finished) = Self::drain_stream(&mut self.source_stream, &mut streams, self.max_buffer_size);
+            let max_buffer_size                 = self.max_buffer_size; 
+            let (new_data_available, finished)  = self.source_stream.as_mut()
+                .map(|source_stream| Self::drain_stream(source_stream, &mut streams, max_buffer_size))
+                .unwrap_or((false, false));
 
             // Mark as finished if the source stream is done
             if finished {
