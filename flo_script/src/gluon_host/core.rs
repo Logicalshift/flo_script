@@ -1,10 +1,7 @@
 use super::editor::*;
 use super::core_namespace::*;
-use super::super::error::*;
-use super::super::symbol::*;
 use super::super::editor::*;
 
-use futures::*;
 use desync::Desync;
 
 use std::sync::*;
@@ -42,8 +39,8 @@ impl GluonScriptHostCore {
             ScriptEdit(Clear)                                   => { namespace.clear(); }
             ScriptEdit(UndefineSymbol(symbol))                  => { namespace.undefine_symbol(symbol); }
             ScriptEdit(SetInputType(symbol, input_type))        => { namespace.define_input_symbol(symbol, input_type); }
-            ScriptEdit(SetStreamingScript(symbol, script_src))  => { unimplemented!("SetStreamingScript") }
-            ScriptEdit(SetComputingScript(symbol, script_src))  => { unimplemented!("SetComputingScript") }
+            ScriptEdit(SetStreamingScript(symbol, script_src))  => { namespace.set_streaming_script(symbol, script_src); }
+            ScriptEdit(SetComputingScript(symbol, script_src))  => { namespace.set_computing_script(symbol, script_src); }
             SetRunIo(run_io)                                    => { namespace.set_run_io(run_io); }
 
             ScriptEdit(WithNamespace(symbol, edits))            => {
@@ -72,20 +69,5 @@ impl GluonScriptHostCore {
     ///
     pub fn edit(&mut self, edit: GluonScriptEdit) {
         self.root_namespace.sync(|root_namespace| Self::edit_namespace(root_namespace, edit));
-    }
-
-    ///
-    /// Creates a stream to read from a particular symbol
-    ///
-    pub fn read_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> {
-        self.root_namespace.sync(|namespace| namespace.read_stream(symbol))
-    }
-
-    ///
-    /// Attaches an input stream to a particular symbol
-    ///
-    pub fn attach_input<InputStream: 'static+Stream<Error=()>+Send>(&mut self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()> 
-    where InputStream::Item: 'static+Clone+Send {
-        self.root_namespace.sync(|namespace| namespace.attach_input(symbol, input))
     }
 }

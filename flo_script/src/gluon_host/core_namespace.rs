@@ -143,4 +143,18 @@ impl GluonScriptNamespace {
         // This affects statements compiled after this is set
         self.run_io = run_io;
     }
+
+    ///
+    /// Loads a streaming script into this namespace
+    ///
+    pub fn set_streaming_script(&mut self, symbol: FloScriptSymbol, script: String) {
+
+    }
+
+    ///
+    /// Loads a computing script into this namespace
+    ///
+    pub fn set_computing_script(&mut self, symbol: FloScriptSymbol, script: String) {
+
+    }
 }
