@@ -33,7 +33,10 @@ pub struct GluonScriptNamespace {
     streaming: Option<RootedThread>,
 
     /// The current thread for generating state updating scripts
-    state: Option<RootedThread>
+    state: Option<RootedThread>,
+
+    /// Whether or not we'll run I/O operations in this namespace or not
+    run_io: bool
 }
 
 impl GluonScriptNamespace {
@@ -44,7 +47,8 @@ impl GluonScriptNamespace {
         GluonScriptNamespace {
             symbols:    HashMap::new(),
             streaming:  None,
-            state:      None
+            state:      None,
+            run_io:     false
         }
     }
 
@@ -118,5 +122,13 @@ impl GluonScriptNamespace {
                 None
             })
             .ok_or(FloScriptError::NotANamespace)
+    }
+
+    ///
+    /// Sets whether or not this namespace will run IO commands
+    ///
+    pub fn set_run_io(&mut self, run_io: bool) {
+        // This affects statements compiled after this is set
+        self.run_io = run_io;
     }
 }
