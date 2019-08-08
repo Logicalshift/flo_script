@@ -37,7 +37,7 @@ impl GluonScriptHostCore {
 
         match edit {
             ScriptEdit(Clear)                                   => { namespace.clear(); }
-            ScriptEdit(UndefineSymbol(symbol))                  => { unimplemented!("UndefineSymbol") }
+            ScriptEdit(UndefineSymbol(symbol))                  => { namespace.undefine_symbol(symbol); }
             ScriptEdit(SetInputType(symbol, input_type))        => { namespace.define_input_symbol(symbol, input_type); }
             ScriptEdit(SetStreamingScript(symbol, script_src))  => { unimplemented!("SetStreamingScript") }
             ScriptEdit(SetComputingScript(symbol, script_src))  => { unimplemented!("SetComputingScript") }

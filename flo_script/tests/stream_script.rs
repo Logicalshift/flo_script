@@ -36,6 +36,18 @@ fn cannot_read_input_stream_as_wrong_type() {
 }
 
 #[test]
+fn cannot_read_input_after_undefining() {
+    let host                = GluonScriptHost::new();
+    let input_x             = FloScriptSymbol::with_name("x");
+
+    host.editor().set_input_type::<i32>(input_x);
+    assert!(host.notebook().receive_output::<i32>(input_x).is_ok());
+
+    host.editor().undefine_symbol(input_x);
+    assert!(host.notebook().receive_output::<u32>(input_x).err().unwrap() == FloScriptError::UndefinedSymbol(input_x));
+}
+
+#[test]
 fn cannot_read_missing_input_stream() {
     let host                = GluonScriptHost::new();
     let input_x             = FloScriptSymbol::with_name("x");

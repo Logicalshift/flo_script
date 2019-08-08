@@ -84,4 +84,11 @@ impl GluonScriptNamespace {
             _                           => Err(FloScriptError::NotAnInputSymbol)
         }
     }
+
+    ///
+    /// Removes the definition of a symbol from this namespace (if it exists)
+    ///
+    pub fn undefine_symbol(&mut self, symbol: FloScriptSymbol) {
+        self.symbols.remove(&symbol);
+    }
 }
