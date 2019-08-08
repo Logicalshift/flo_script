@@ -40,7 +40,9 @@ impl FloScriptHost for GluonScriptHost {
     /// The notebook can be used to attach input streams to input symbols and retrieve output streams from scripts.
     /// 
     fn notebook(&self) -> Self::Notebook {
-        GluonScriptNotebook::new(Arc::clone(&self.core))
+        let root_namespace = self.core.sync(|core| core.root_namespace());
+
+        GluonScriptNotebook::new(root_namespace)
     }
 
     ///

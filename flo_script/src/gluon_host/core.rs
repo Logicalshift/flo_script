@@ -5,6 +5,9 @@ use super::super::symbol::*;
 use super::super::editor::*;
 
 use futures::*;
+use desync::Desync;
+
+use std::sync::*;
 
 ///
 /// Core of a script host that targets the Gluon scripting language
@@ -13,7 +16,7 @@ use futures::*;
 ///
 pub struct GluonScriptHostCore {
     /// The root namespace
-    root_namespace: GluonScriptNamespace,
+    root_namespace: Arc<Desync<GluonScriptNamespace>>,
 }
 
 impl GluonScriptHostCore {
@@ -24,7 +27,7 @@ impl GluonScriptHostCore {
         let root_namespace = GluonScriptNamespace::new();
 
         GluonScriptHostCore { 
-            root_namespace
+            root_namespace: Arc::new(Desync::new(root_namespace))
         }
     }
 
@@ -58,17 +61,24 @@ impl GluonScriptHostCore {
     }
 
     ///
+    /// Retrieves the root namespace for this core
+    ///
+    pub fn root_namespace(&self) -> Arc<Desync<GluonScriptNamespace>> {
+        Arc::clone(&self.root_namespace)
+    }
+
+    ///
     /// Performs an edit action on this core
     ///
     pub fn edit(&mut self, edit: GluonScriptEdit) {
-        Self::edit_namespace(&mut self.root_namespace, edit)
+        self.root_namespace.sync(|root_namespace| Self::edit_namespace(root_namespace, edit));
     }
 
     ///
     /// Creates a stream to read from a particular symbol
     ///
     pub fn read_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> {
-        self.root_namespace.read_stream(symbol)
+        self.root_namespace.sync(|namespace| namespace.read_stream(symbol))
     }
 
     ///
@@ -76,6 +86,6 @@ impl GluonScriptHostCore {
     ///
     pub fn attach_input<InputStream: 'static+Stream<Error=()>+Send>(&mut self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()> 
     where InputStream::Item: 'static+Clone+Send {
-        self.root_namespace.attach_input(symbol, input)
+        self.root_namespace.sync(|namespace| namespace.attach_input(symbol, input))
     }
 }
