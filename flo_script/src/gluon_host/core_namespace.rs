@@ -108,7 +108,7 @@ impl GluonScriptNamespace {
     /// Retrieves a sub-namespace within this namespace. The symbol must already be defined to be a namespace, or must be
     /// undefined (in which case it will be assigned as a namespace)
     ///
-    pub fn get_namespace(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Arc<Desync<GluonScriptNamespace>>> {
+    pub fn get_or_create_namespace(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Arc<Desync<GluonScriptNamespace>>> {
         // Insert the namespace if it doesn't already exist
         if self.symbols.get(&symbol).is_none() {
             self.symbols.insert(symbol, SymbolDefinition::Namespace(Arc::new(Desync::new(GluonScriptNamespace::new()))));
@@ -122,6 +122,18 @@ impl GluonScriptNamespace {
                 None
             })
             .ok_or(FloScriptError::NotANamespace)
+    }
+
+    ///
+    /// Retrieves a sub-namespace, if it is defined
+    ///
+    pub fn get_namespace(&self, symbol: FloScriptSymbol) -> Option<Arc<Desync<GluonScriptNamespace>>> {
+        self.symbols.get(&symbol)
+            .and_then(|symbol| if let SymbolDefinition::Namespace(symbol) = symbol {
+                Some(Arc::clone(symbol))
+            } else {
+                None
+            })
     }
 
     ///

@@ -35,8 +35,11 @@ impl FloScriptNotebook for GluonScriptNotebook {
     }
 
     /// Retrieves a notebook containing the symbols in the specified namespace
-    fn namespace<'a>(&'a self, symbol: FloScriptSymbol) -> Option<&'a Self> {
-        unimplemented!()
+    fn namespace(&self, symbol: FloScriptSymbol) -> Option<Self> {
+        self.namespace.sync(move |core| {
+            core.get_namespace(symbol)
+        })
+        .map(|namespace| GluonScriptNotebook::new(namespace))
     }
 
     /// Attaches an input stream to an input symbol. This will replace any existing input stream for that symbol if there is one.

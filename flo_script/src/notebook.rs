@@ -33,7 +33,7 @@ pub enum NotebookUpdate {
 /// FloScripts are evaluated as 'notebooks'. A notebook is a collection of scripts that provide outputs as
 /// streams. Inputs similarly are provided as streams.
 ///
-pub trait FloScriptNotebook : Send+Sync {
+pub trait FloScriptNotebook : Sized+Send+Sync {
     /// The type of the stream used to receive updates from this notebook
     type UpdateStream  : Stream<Item=NotebookUpdate, Error=()>+Send;
 
@@ -41,7 +41,7 @@ pub trait FloScriptNotebook : Send+Sync {
     fn updates(&self) -> Self::UpdateStream;
 
     /// Retrieves a notebook containing the symbols in the specified namespace
-    fn namespace<'a>(&'a self, symbol: FloScriptSymbol) -> Option<&'a Self>;
+    fn namespace(&self, symbol: FloScriptSymbol) -> Option<Self>;
 
     /// Attaches an input stream to an input symbol. This will replace any existing input stream for that symbol if there is one.
     fn attach_input<InputStream: 'static+Stream<Error=()>+Send>(&self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()>

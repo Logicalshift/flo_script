@@ -47,7 +47,7 @@ impl GluonScriptHostCore {
             SetRunIo(run_io)                                    => { namespace.set_run_io(run_io); }
 
             ScriptEdit(WithNamespace(symbol, edits))            => {
-                namespace.get_namespace(symbol)
+                namespace.get_or_create_namespace(symbol)
                     .map(|namespace| {
                         namespace.sync(move |namespace| {
                             edits.into_iter().for_each(|edit| {
