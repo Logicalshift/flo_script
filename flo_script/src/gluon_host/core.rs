@@ -13,7 +13,7 @@ use futures::*;
 ///
 pub struct GluonScriptHostCore {
     /// The root namespace
-    root_namespace: GluonScriptNamespace
+    root_namespace: GluonScriptNamespace,
 }
 
 impl GluonScriptHostCore {
@@ -42,7 +42,18 @@ impl GluonScriptHostCore {
             ScriptEdit(SetStreamingScript(symbol, script_src))  => { unimplemented!("SetStreamingScript") }
             ScriptEdit(SetComputingScript(symbol, script_src))  => { unimplemented!("SetComputingScript") }
             SetRunIo(run_io)                                    => { unimplemented!("SetRunIo") }
-            ScriptEdit(WithNamespace(symbol, edits))            => { unimplemented!("WithNamespace") }
+
+            ScriptEdit(WithNamespace(symbol, edits))            => {
+                namespace.get_namespace(symbol)
+                    .map(|namespace| {
+                        namespace.sync(move |namespace| {
+                            edits.into_iter().for_each(|edit| {
+                                Self::edit_namespace(namespace, ScriptEdit(edit))
+                            });
+                        });
+                    })
+                    .ok();
+            }
         }
     }
 

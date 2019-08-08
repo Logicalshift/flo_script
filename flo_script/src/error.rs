@@ -16,6 +16,12 @@ pub enum FloScriptError {
     /// Tried to attach an input stream to a symbol that is not defined as an input symbol
     NotAnInputSymbol,
 
+    /// Tried to perform an operation on an item that is not a namespace
+    NotANamespace,
+
+    /// Attempted to read from a namespace as if it were a stream
+    CannotReadFromANamespace,
+
     /// Requested an output or an input with the wrong type
     IncorrectType,
 
