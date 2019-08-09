@@ -73,13 +73,27 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
         let stream_id = self.next_stream_id;
         self.next_stream_id += 1;
 
-        // Create the stream data
-        let stream_data = StreamData {
-            buffer: VecDeque::new(),
-            ready:  None
-        };
+        // Finish allocating the stream in the background
+        self.streams.desync(move |streams| {
+            // For a new stream, we'll return the same symbols from the stream with the most full buffer
+            let mut buffer: Option<&VecDeque<_>> = None;
+            for existing_stream_data in streams.values() {
+                if existing_stream_data.buffer.len() > buffer.map(|buffer| buffer.len()).unwrap_or(0) {
+                    buffer = Some(&existing_stream_data.buffer);
+                }
+            }
 
-        self.streams.desync(move |streams| { streams.insert(stream_id, stream_data); });
+            let buffer = buffer.map(|buffer| buffer.clone()).unwrap_or_else(|| VecDeque::new());
+
+            // Create the stream data
+            let stream_data = StreamData {
+                buffer: buffer,
+                ready:  None
+            };
+
+            // Store ready for use            
+            streams.insert(stream_id, stream_data);
+        });
 
         stream_id
     }
