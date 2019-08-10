@@ -56,7 +56,10 @@ pub struct InputStreamCore<Symbol: Send, Source> {
     streams: Arc<Desync<HashMap<usize, StreamData<Symbol>>>>,
 
     /// The state streams that are attached to this core
-    states: Arc<Desync<HashMap<usize, StateData<Symbol>>>>
+    states: Arc<Desync<HashMap<usize, StateData<Symbol>>>>,
+
+    /// Desync where we send notifications of updates when they happen (this avoids issues with recursion when polls generate other polls)
+    notify: Arc<Desync<()>>
 }
 
 impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> InputStreamCore<Symbol, Source> {
@@ -71,7 +74,8 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
             max_buffer_size:    DEFAULT_MAX_BUFFER_SIZE,
             stream_finished:    false,
             streams:            Arc::new(Desync::new(HashMap::new())),
-            states:             Arc::new(Desync::new(HashMap::new()))
+            states:             Arc::new(Desync::new(HashMap::new())),
+            notify:             Arc::new(Desync::new(()))
         }
     }
 
@@ -213,10 +217,23 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     ///
     /// New data has arrived: wake all of the streams attached to this core
     ///
-    fn wake_streams(&mut self, stream_id: usize) {
-        self.streams.desync(move |streams| { 
-            streams.iter_mut()
-                .for_each(|(id, stream)| { if *id != stream_id { stream.ready.take().map(|ready| ready.notify()); } }); 
+    fn wake_streams(&mut self, stream_id: usize, streams: &mut HashMap<usize, StreamData<Symbol>>) {
+        // We'll send the notification to the notify desync
+        let notify = Arc::clone(&self.notify);
+
+        // Work out the tasks that need notifications
+        let to_notify = streams.iter_mut().flat_map(|(id, stream)| {
+            if *id != stream_id {
+                stream.ready.take()
+            } else {
+                None
+            }
+        }).collect::<Vec<_>>();
+
+        // Send to the notification desync
+        notify.desync(move |_| {
+            to_notify.into_iter()
+                .for_each(|task| task.notify())
         });
     }
 
@@ -281,7 +298,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
 
             // Wake all of the other streams if new data has been loaded from the source stream
             if new_data_available {
-                self.wake_streams(stream_id);
+                self.wake_streams(stream_id, streams);
             }
 
             // Buffer the next symbol
@@ -347,7 +364,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
 
             // Wake all of the other streams if new data has been loaded from the source stream
             if new_data_available {
-                self.wake_streams(stream_id);
+                streams.sync(|streams| self.wake_streams(stream_id, streams));
             }
 
             // Try to read the value from the stream again
