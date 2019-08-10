@@ -3,7 +3,6 @@ use super::input_stream_core::*;
 use super::super::error::*;
 
 use futures::*;
-use desync::Desync;
 
 use std::any::*;
 use std::sync::*;
@@ -34,7 +33,7 @@ impl InputStreamSource {
     ///
     /// Retrieves a reference to the core of this stream source, if available
     ///
-    fn core<SymbolType: 'static+Clone+Send>(&mut self) -> FloScriptResult<Arc<Desync<InputStreamCore<SymbolType, Box<dyn Stream<Item=SymbolType, Error=()>+Send>>>>> {
+    fn core<SymbolType: 'static+Clone+Send>(&mut self) -> FloScriptResult<Arc<InputStreamCore<SymbolType, Box<dyn Stream<Item=SymbolType, Error=()>+Send>>>> {
         // Make sure we don't try to create a core of the wrong type
         if TypeId::of::<SymbolType>() != self.input_symbol_type {
             return Err(FloScriptError::IncorrectType)
@@ -44,7 +43,7 @@ impl InputStreamSource {
         let stream_core = self.stream_core.get_or_insert_with(|| {
             let new_core = InputStreamCore::<SymbolType, Box<dyn Stream<Item=SymbolType, Error=()>+Send>>::new();
 
-            Arc::new(Desync::new(new_core))
+            Arc::new(new_core)
         });
 
         // Downcast to the correct stream type
@@ -61,7 +60,7 @@ impl InputStreamSource {
     pub fn attach<SymbolStream: 'static+Send+Stream<Error=()>>(&mut self, input_stream: SymbolStream) -> FloScriptResult<()>
     where SymbolStream::Item: 'static+Clone+Send {
         // Replace the stream in the core with the new one that has been passed in
-        self.core()?.desync(move |core| { core.replace_stream(Box::new(input_stream)); });
+        self.core()?.replace_stream(Box::new(input_stream));
 
         Ok(())
     } 
