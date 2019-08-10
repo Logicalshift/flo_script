@@ -17,16 +17,16 @@ type ValueB = OpaqueValue<RootedThread, B>;
 ///
 #[derive(Clone, Debug, Trace, Userdata)]
 #[gluon_trace(skip)]
-struct StateDependencies {
+struct DerivedStateDependencies {
     dependencies: Arc<HashSet<FloScriptSymbol>>
 }
 
-impl StateDependencies {
+impl DerivedStateDependencies {
     ///
     /// Creates a new (empty) state dependencies structure
     ///
-    fn new() -> StateDependencies {
-        StateDependencies {
+    fn new() -> DerivedStateDependencies {
+        DerivedStateDependencies {
             dependencies: Arc::new(HashSet::new())
         }
     }
@@ -34,8 +34,8 @@ impl StateDependencies {
     ///
     /// Creates a new state dependencies structure containing a single dependency ID
     ///
-    fn with_dependency(dependency: FloScriptSymbol) -> StateDependencies {
-        StateDependencies {
+    fn with_dependency(dependency: FloScriptSymbol) -> DerivedStateDependencies {
+        DerivedStateDependencies {
             dependencies: Arc::new(iter::once(dependency).collect())
         }
     }
@@ -43,7 +43,7 @@ impl StateDependencies {
     ///
     /// Merge these dependencies with the dependencies from another state
     ///
-    fn merge_with(&mut self, merge_with: &StateDependencies) {
+    fn merge_with(&mut self, merge_with: &DerivedStateDependencies) {
         if merge_with.dependencies.len() == 0 {
             // Nothing to do
         } else if self.dependencies.len() == 0 {
@@ -79,40 +79,40 @@ impl StateDependencies {
 /// what to re-evaluate when new data arrives via an input stream.
 ///
 #[derive(VmType, Getable, Pushable)]
-#[gluon(vm_type = "flo.state.State")]
-pub struct State<TValue> {
+#[gluon(vm_type = "flo.state.DerivedState")]
+pub struct DerivedState<TValue> {
     /// The value of this state
-    value: TValue,
+    value:          TValue,
 
     // User data for this state
-    dependencies: UserdataValue<StateDependencies>
+    dependencies:   UserdataValue<DerivedStateDependencies>
 }
 
-impl<TValue> State<TValue> {
+impl<TValue> DerivedState<TValue> {
     ///
     /// Creates a new state that is not dependent on any input states
     ///
-    pub fn new(value: TValue) -> State<TValue> {
-        State { 
+    pub fn new(value: TValue) -> DerivedState<TValue> {
+        DerivedState { 
             value:          value,
-            dependencies:   UserdataValue(StateDependencies::new())
+            dependencies:   UserdataValue(DerivedStateDependencies::new())
         }
     }
 
     ///
     /// Creates a new state with a single dependency
     ///
-    pub fn with_dependency(value: TValue, dependency: FloScriptSymbol) -> State<TValue> {
-        State { 
+    pub fn with_dependency(value: TValue, dependency: FloScriptSymbol) -> DerivedState<TValue> {
+        DerivedState { 
             value:          value,
-            dependencies:   UserdataValue(StateDependencies::with_dependency(dependency))
+            dependencies:   UserdataValue(DerivedStateDependencies::with_dependency(dependency))
         }        
     }
 
     ///
     /// Merges the dependencies from another state to update this state
     ///
-    fn merge_dependencies(self, merge_with: UserdataValue<StateDependencies>) -> State<TValue> {
+    fn merge_dependencies(self, merge_with: UserdataValue<DerivedStateDependencies>) -> DerivedState<TValue> {
         let mut new_state = self;
 
         let UserdataValue(ref mut our_dependencies) = new_state.dependencies;
@@ -127,7 +127,7 @@ impl<TValue> State<TValue> {
 ///
 /// Implementation of flat_map for the State monad
 ///
-fn flat_map(mut a: FunctionRef<fn(ValueA) -> State<ValueB>>, b: State<ValueA>) -> State<ValueB> {
+fn flat_map(mut a: FunctionRef<fn(ValueA) -> DerivedState<ValueB>>, b: DerivedState<ValueA>) -> DerivedState<ValueB> {
     let value_a = b.value;
     let deps_a  = b.dependencies;
     let value_b = a.call(value_a).unwrap();
@@ -138,8 +138,8 @@ fn flat_map(mut a: FunctionRef<fn(ValueA) -> State<ValueB>>, b: State<ValueA>) -
 ///
 /// Wraps a value in a new state
 ///
-fn wrap(a: ValueA) -> State<ValueA> {
-    State::new(a)
+fn wrap(a: ValueA) -> DerivedState<ValueA> {
+    DerivedState::new(a)
 }
 
 ///
@@ -147,9 +147,9 @@ fn wrap(a: ValueA) -> State<ValueA> {
 ///
 pub fn load(vm: &Thread) -> Result<ExternModule> {
     ExternModule::new(vm, record! {
-        type flo::state::State a    => State<A>,
+        type flo::state::DerivedState a => DerivedState<A>,
 
-        wrap                        => primitive!(1, wrap),
-        flat_map                    => primitive!(2, flat_map)
+        wrap                            => primitive!(1, wrap),
+        flat_map                        => primitive!(2, flat_map)
     })
 }

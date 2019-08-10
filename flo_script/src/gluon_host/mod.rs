@@ -3,7 +3,7 @@ mod core_namespace;
 mod host;
 mod editor;
 mod notebook;
-mod state;
+mod derived_state;
 mod computing_script;
 
 pub use self::host::*;

@@ -1,4 +1,4 @@
-use super::state::*;
+use super::derived_state::*;
 use super::super::error::*;
 
 use gluon::{RootedThread};
@@ -18,7 +18,7 @@ enum ComputingScriptState {
     /// Script has never run before
     NeverRun,
 
-    /// Script is waiting for the next value
+    /// Script has finished and is waiting for the next value
     WaitingForNextValue,
 
     /// Script is running and we're waiting for the value
@@ -58,18 +58,18 @@ pub struct ComputingScriptStream<Item> {
 }
 
 impl<Item: 'static+VmType> ComputingScriptStream<Item> 
-where State<Item>: VmType {
+where DerivedState<Item>: VmType {
     ///
     /// Creates a new computing thread that reads from the specified symbol
     ///
     pub fn new(thread: Arc<RootedThread>, script: Arc<CompileValue<SpannedExpr<Symbol>>>) -> FloScriptResult<ComputingScriptStream<Item>> {
-        let symbol_type = Item::make_type(&*thread);
-        let state_type  = State::<Item>::make_type(&*thread);
+        let symbol_type         = Item::make_type(&*thread);
+        let derived_state_type  = DerivedState::<Item>::make_type(&*thread);
 
         let result_type = if script.typ == symbol_type {
             // Computed expression with no dependencies
             ComputingScriptResultType::StraightValue
-        } else if script.typ == state_type {
+        } else if script.typ == derived_state_type {
             // Computed expression with dependencies
             ComputingScriptResultType::DerivedValue
         } else {
