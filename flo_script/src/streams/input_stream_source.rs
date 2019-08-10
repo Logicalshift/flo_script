@@ -69,7 +69,7 @@ impl InputStreamSource {
     ///
     /// Creates a new stream reader for this input source
     ///
-    pub fn read<SymbolType: 'static+Clone+Send>(&mut self) -> FloScriptResult<InputStream<SymbolType, Box<dyn Stream<Item=SymbolType, Error=()>+Send>>> {
+    pub fn read_as_stream<SymbolType: 'static+Clone+Send>(&mut self) -> FloScriptResult<InputStream<SymbolType, Box<dyn Stream<Item=SymbolType, Error=()>+Send>>> {
         // Create a new stream from the core
         let core        = self.core()?;
         let new_stream  = InputStream::new(core);

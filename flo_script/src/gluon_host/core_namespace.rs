@@ -78,7 +78,7 @@ impl GluonScriptNamespace {
 
         match self.symbols.get_mut(&symbol) {
             None                        => Err(FloScriptError::UndefinedSymbol(symbol)),
-            Some(Input(input_source))   => Ok(Box::new(input_source.read()?)),
+            Some(Input(input_source))   => Ok(Box::new(input_source.read_as_stream()?)),
             Some(Namespace(_))          => Err(FloScriptError::CannotReadFromANamespace)
         }
     }

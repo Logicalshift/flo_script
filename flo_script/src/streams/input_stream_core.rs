@@ -160,7 +160,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     /// most recent symbol available from the input stream (for states, only the most recent state is
     /// relevant).
     ///
-    pub fn allocate_new_state_stream(&mut self) -> usize {
+    pub fn allocate_state_stream(&mut self) -> usize {
         // Assign a stream ID for this state
         let stream_id = self.next_stream_id;
         self.next_stream_id += 1;
