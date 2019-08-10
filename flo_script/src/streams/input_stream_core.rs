@@ -4,6 +4,7 @@ use desync::Desync;
 
 use std::usize;
 use std::sync::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::{HashMap, VecDeque};
 
 /// The default max buffer size for an input stream core
@@ -59,7 +60,7 @@ struct StreamBuffers<Symbol, Source> {
 ///
 pub struct InputStreamCore<Symbol: Send, Source: Send> {
     /// The identifier to attach to the next stream that wants to read from this core
-    next_stream_id: usize,
+    next_stream_id: AtomicUsize,
 
     /// The maximum number of symbols to buffer between the different readers before refusing to read more symbols from the source
     max_buffer_size: usize,
@@ -87,7 +88,7 @@ impl<Symbol: 'static+Clone+Send, Source: 'static+Send+Stream<Item=Symbol, Error=
         };
 
         InputStreamCore {
-            next_stream_id:     0,
+            next_stream_id:     AtomicUsize::new(0),
             max_buffer_size:    DEFAULT_MAX_BUFFER_SIZE,
             buffers:            Arc::new(Desync::new(buffers)),
             notify:             Arc::new(Desync::new(()))
@@ -123,10 +124,9 @@ impl<Symbol: 'static+Clone+Send, Source: 'static+Send+Stream<Item=Symbol, Error=
     /// input stream. If they're connected after the other streams have started reading, they will return
     /// symbols starting at the first one that's still in the buffer.
     ///
-    pub fn allocate_stream(&mut self) -> usize {
+    pub fn allocate_stream(&self) -> usize {
         // Assign an ID to this stream
-        let stream_id = self.next_stream_id;
-        self.next_stream_id += 1;
+        let stream_id = self.next_stream_id.fetch_add(1, Ordering::Relaxed);
 
         // Finish allocating the stream in the background
         self.buffers.desync(move |buffers| {
@@ -156,7 +156,7 @@ impl<Symbol: 'static+Clone+Send, Source: 'static+Send+Stream<Item=Symbol, Error=
     ///
     /// Frees a stream from this core
     ///
-    pub fn deallocate_stream(&mut self, stream_id: usize) {
+    pub fn deallocate_stream(&self, stream_id: usize) {
         self.buffers.desync(move |buffers| { 
             buffers.streams.remove(&stream_id); 
             buffers.states.remove(&stream_id);
@@ -170,10 +170,9 @@ impl<Symbol: 'static+Clone+Send, Source: 'static+Send+Stream<Item=Symbol, Error=
     /// most recent symbol available from the input stream (for states, only the most recent state is
     /// relevant).
     ///
-    pub fn allocate_state_stream(&mut self) -> usize {
+    pub fn allocate_state_stream(&self) -> usize {
         // Assign a stream ID for this state
-        let stream_id = self.next_stream_id;
-        self.next_stream_id += 1;
+        let stream_id = self.next_stream_id.fetch_add(1, Ordering::Relaxed);
 
         // Set up the data structure
         self.buffers.desync(move |buffers| {
@@ -300,7 +299,7 @@ impl<Symbol: 'static+Clone+Send, Source: 'static+Send+Stream<Item=Symbol, Error=
     ///
     /// Polls the stream with a particular ID (from a future or a stream)
     ///
-    pub fn poll_stream(&mut self, stream_id: usize, poll_task: Task) -> Poll<Option<Symbol>, ()> {
+    pub fn poll_stream(&self, stream_id: usize, poll_task: Task) -> Poll<Option<Symbol>, ()> {
         // Clone the stream reference to get around some Rust book-keeping (it assumes all of 'self' is borrowed in the closure if we don't do this)
         let buffers = Arc::clone(&self.buffers);
 
@@ -362,7 +361,7 @@ impl<Symbol: 'static+Clone+Send, Source: 'static+Send+Stream<Item=Symbol, Error=
     ///
     /// Polls a state stream for the next update
     ///
-    pub fn poll_state(&mut self, stream_id: usize, poll_task: Task) -> Poll<Option<Symbol>, ()> {
+    pub fn poll_state(&self, stream_id: usize, poll_task: Task) -> Poll<Option<Symbol>, ()> {
         let buffers = Arc::clone(&self.buffers);
 
         buffers.sync(|buffers| {
