@@ -4,6 +4,7 @@ use super::super::error::*;
 
 use desync::Desync;
 use gluon::*;
+use gluon_vm;
 use futures::*;
 
 use std::any::*;
@@ -17,6 +18,9 @@ use std::collections::HashMap;
 enum SymbolDefinition {
     /// Symbol is an input stream
     Input(InputStreamSource),
+
+    /// Symbol represents a script that couldn't be compiled
+    ScriptError(gluon_vm::Error, String),
 
     /// Symbol is a namespace
     Namespace(Arc<Desync<GluonScriptNamespace>>)
@@ -77,9 +81,10 @@ impl GluonScriptNamespace {
         use self::SymbolDefinition::*;
 
         match self.symbols.get_mut(&symbol) {
-            None                        => Err(FloScriptError::UndefinedSymbol(symbol)),
-            Some(Input(input_source))   => Ok(Box::new(input_source.read_as_stream()?)),
-            Some(Namespace(_))          => Err(FloScriptError::CannotReadFromANamespace)
+            None                                => Err(FloScriptError::UndefinedSymbol(symbol)),
+            Some(ScriptError(_, description))   => Err(FloScriptError::ScriptError(description.clone())),
+            Some(Input(input_source))           => Ok(Box::new(input_source.read_as_stream()?)),
+            Some(Namespace(_))                  => Err(FloScriptError::CannotReadFromANamespace)
         }
     }
 
@@ -90,9 +95,10 @@ impl GluonScriptNamespace {
         use self::SymbolDefinition::*;
 
         match self.symbols.get_mut(&symbol) {
-            None                        => Err(FloScriptError::UndefinedSymbol(symbol)),
-            Some(Input(input_source))   => Ok(Box::new(input_source.read_as_state_stream()?)),
-            Some(Namespace(_))          => Err(FloScriptError::CannotReadFromANamespace)
+            None                                => Err(FloScriptError::UndefinedSymbol(symbol)),
+            Some(ScriptError(_, description))   => Err(FloScriptError::ScriptError(description.clone())),
+            Some(Input(input_source))           => Ok(Box::new(input_source.read_as_state_stream()?)),
+            Some(Namespace(_))                  => Err(FloScriptError::CannotReadFromANamespace)
         }
     }
 
