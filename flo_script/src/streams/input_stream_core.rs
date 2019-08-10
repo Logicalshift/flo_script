@@ -88,7 +88,11 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     }
 
     ///
-    /// Allocates a new stream that will read from the input stream (starting at the most recent symbol)
+    /// Allocates a new stream that will read from the input stream
+    ///
+    /// Streams are polled using the `poll_stream()` function and will receive every symbol sent to the
+    /// input stream. If they're connected after the other streams have started reading, they will return
+    /// symbols starting at the first one that's still in the buffer.
     ///
     pub fn allocate_stream(&mut self) -> usize {
         // Assign an ID to this stream
@@ -125,6 +129,36 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     ///
     pub fn deallocate_stream(&mut self, stream_id: usize) {
         self.streams.desync(move |streams| { streams.remove(&stream_id); });
+        self.states.desync(move |states| { states.remove(&stream_id); });
+    }
+
+    ///
+    /// Allocates a new state stream, returning the stream ID
+    ///
+    /// State streams are polled using the `poll_state()` function. These streams only return the
+    /// most recent symbol available from the input stream (for states, only the most recent state is
+    /// relevant).
+    ///
+    pub fn allocate_new_state_stream(&mut self) -> usize {
+        // Assign a stream ID for this state
+        let stream_id = self.next_stream_id;
+        self.next_stream_id += 1;
+
+        let last_symbol = self.last_symbol.clone();
+
+        // Set up the data structure
+        self.states.desync(move |states| {
+            // Set up the state data for this stream
+            let new_state = StateData {
+                current_symbol: last_symbol,
+                ready:          None
+            };
+
+            // Create the new state structure
+            states.insert(stream_id, new_state);
+        });
+
+        stream_id
     }
 
     ///
