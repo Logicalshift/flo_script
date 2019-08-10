@@ -223,7 +223,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     ///
     /// Updates the last symbol associated with this stream
     ///
-    fn update_last_symbol(&mut self, last_symbol: Symbol) {
+    fn update_last_symbol(&mut self, last_symbol: Symbol, stream_id: usize) {
         self.states.desync(move |states| {
             // Update all of the active symbols for all of the states
             states.values_mut()
@@ -232,7 +232,11 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
                 });
 
             // Wake all of the states that are waiting for an update
-            states.values_mut().for_each(|state| { state.ready.take().map(|ready| ready.notify()); });
+            states.iter_mut().for_each(|(id, state)| {
+                if *id != stream_id { 
+                    state.ready.take().map(|ready| ready.notify()); 
+                }
+            });
         });
     }
 
@@ -246,7 +250,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
         // As sync can potentially run on a separate thread, get the active task before acting on the streams
         let task    = poll_task;
 
-        streams.sync(|mut streams| {
+        streams.sync(|streams| {
             // If the stream has buffered data waiting, just return that
             if let Some(stream) = streams.get_mut(&stream_id) {
                 // Any task for this stream is now invalid
@@ -264,11 +268,11 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
             // Read as many symbols as we can from the source stream and buffer them (this avoids too much round-robin signalling)
             let max_buffer_size                                 = self.max_buffer_size; 
             let (new_data_available, finished, new_last_symbol) = self.source_stream.as_mut()
-                .map(|source_stream| Self::drain_stream(source_stream, &mut streams, max_buffer_size))
+                .map(|source_stream| Self::drain_stream(source_stream, streams, max_buffer_size))
                 .unwrap_or((false, false, None));
 
             // Update the last symbol if there's a new one
-            new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol));
+            new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol, stream_id));
 
             // Mark as finished if the source stream is done
             if finished {
@@ -296,6 +300,74 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
             }
 
             // Streams whose ID doesn't exist return no data
+            Ok(Async::Ready(None))
+        })
+    }
+
+    ///
+    /// Polls a state stream for the next update
+    ///
+    pub fn poll_state(&mut self, stream_id: usize, poll_task: Task) -> Poll<Option<Symbol>, ()> {
+        let states = Arc::clone(&self.states);
+
+        states.sync(|states| {
+            if let Some(state) = states.get_mut(&stream_id) {
+                state.ready.take();
+
+                if let Some(value) = state.current_symbol.take() {
+                    // Return the current value if there is one
+                    return Ok(Async::Ready(Some(value)));
+                }
+            }
+
+            // Return immediately if the input stream is finished
+            if self.stream_finished {
+                return Ok(Async::Ready(None));
+            }
+
+            // Attempt to read any new symbols from the input streams
+            let streams = Arc::clone(&self.streams);
+            let (new_data_available, finished, new_last_symbol) = streams.sync(|streams| {
+                // Read as many symbols as we can from the source stream and buffer them (this avoids too much round-robin signalling)
+                let max_buffer_size                                 = self.max_buffer_size; 
+                let (new_data_available, finished, new_last_symbol) = self.source_stream.as_mut()
+                    .map(|source_stream| Self::drain_stream(source_stream, streams, max_buffer_size))
+                    .unwrap_or((false, false, None));
+
+                (new_data_available, finished, new_last_symbol)
+            });
+
+            // Update the last symbol if there's a new one
+            new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol, stream_id));
+
+            // Mark as finished if the source stream is done
+            if finished {
+                self.stream_finished = true;
+            }
+
+            // Wake all of the other streams if new data has been loaded from the source stream
+            if new_data_available {
+                self.wake_streams(stream_id);
+            }
+
+            // Try to read the value from the stream again
+            if let Some(state) = states.get_mut(&stream_id) {
+                state.ready.take();
+
+                if let Some(value) = state.current_symbol.take() {
+                    // Return the current value if there is one
+                    return Ok(Async::Ready(Some(value)));
+                } else if !self.stream_finished {
+                    // Wait for the next state update
+                    state.ready = Some(poll_task);
+                    return Ok(Async::NotReady);
+                } else {
+                    // Stream is finished: there will be no more states
+                    return Ok(Async::Ready(None));
+                }
+            }
+
+            // Not a state stream, so we just stop immediately
             Ok(Async::Ready(None))
         })
     }
