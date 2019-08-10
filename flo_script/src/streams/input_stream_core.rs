@@ -191,6 +191,22 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     }
 
     ///
+    /// Updates the last symbol associated with this stream
+    ///
+    fn update_last_symbol(&mut self, last_symbol: Symbol) {
+        self.states.desync(move |states| {
+            // Update all of the active symbols for all of the states
+            states.values_mut()
+                .for_each(|state| {
+                    state.current_symbol = Some(last_symbol.clone());
+                });
+
+            // Wake all of the states that are waiting for an update
+            states.values_mut().for_each(|state| { state.ready.take().map(|ready| ready.notify()); });
+        });
+    }
+
+    ///
     /// Polls the stream with a particular ID (from a future or a stream)
     ///
     pub fn poll_stream(&mut self, stream_id: usize, poll_task: Task) -> Poll<Option<Symbol>, ()> {
@@ -222,7 +238,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
                 .unwrap_or((false, false, None));
 
             // Update the last symbol if there's a new one
-            new_last_symbol.map(|new_last_symbol| self.last_symbol = Some(new_last_symbol));
+            new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol));
 
             // Mark as finished if the source stream is done
             if finished {
