@@ -1,5 +1,9 @@
+use super::state::*;
+use super::super::error::*;
+
 use gluon::{RootedThread};
 use gluon::compiler_pipeline::{CompileValue};
+use gluon_vm::api::{VmType};
 use gluon_base::ast::{SpannedExpr};
 use gluon_base::symbol::{Symbol};
 
@@ -38,15 +42,28 @@ pub struct ComputingScriptStream<Item> {
     item: PhantomData<Item>
 }
 
-impl<Item> ComputingScriptStream<Item> {
+impl<Item: VmType> ComputingScriptStream<Item> {
     ///
     /// Creates a new computing thread that reads from the specified symbol
     ///
-    pub fn new(thread: Arc<RootedThread>, script: Arc<CompileValue<SpannedExpr<Symbol>>>) -> ComputingScriptStream<Item> {
-        ComputingScriptStream {
+    pub fn new(thread: Arc<RootedThread>, script: Arc<CompileValue<SpannedExpr<Symbol>>>) -> FloScriptResult<ComputingScriptStream<Item>> {
+        let symbol_type = Item::make_type(&*thread);
+        //let state_type  = State::<Item>::make_type(&*thread);
+
+        if script.typ == symbol_type {
+            // Computed expression with no dependencies
+        /* } else if script.typ == state_type {
+            // Computed expression with dependencies
+        */
+        } else {
+            // Not a valid type
+            return Err(FloScriptError::IncorrectType);
+        }
+
+        Ok(ComputingScriptStream {
             root:   thread,
             script: script,
             item:   PhantomData
-        }
+        })
     }
 }
