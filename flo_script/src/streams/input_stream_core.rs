@@ -2,6 +2,7 @@ use futures::*;
 use futures::task::Task;
 use desync::Desync;
 
+use std::usize;
 use std::sync::*;
 use std::collections::{HashMap, VecDeque};
 
@@ -34,6 +35,17 @@ struct StateData<Symbol> {
 }
 
 ///
+/// The collection of streams and states stored by an input stream core
+///
+struct InputStreamCollection<Symbol> {
+    /// The streams for this core
+    streams: HashMap<usize, StreamData<Symbol>>,
+
+    /// The states for this core
+    states: HashMap<usize, StateData<Symbol>>
+}
+
+///
 /// The core shared between all streams generated from an input symbol
 ///
 pub struct InputStreamCore<Symbol: Send, Source> {
@@ -53,10 +65,7 @@ pub struct InputStreamCore<Symbol: Send, Source> {
     max_buffer_size: usize,
 
     /// The streams that are attached to this core
-    streams: Arc<Desync<HashMap<usize, StreamData<Symbol>>>>,
-
-    /// The state streams that are attached to this core
-    states: Arc<Desync<HashMap<usize, StateData<Symbol>>>>,
+    streams: Arc<Desync<InputStreamCollection<Symbol>>>,
 
     /// Desync where we send notifications of updates when they happen 
     // (this avoids issues with recursion when polls generate other polls, so that streams or states is not in use when we notify of an update)
@@ -68,14 +77,18 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     /// Creates a new input stream core
     ///
     pub fn new() -> InputStreamCore<Symbol, Source> {
+        let stream_collection = InputStreamCollection {
+            streams: HashMap::new(),
+            states: HashMap::new()
+        };
+
         InputStreamCore {
             source_stream:      None,
             last_symbol:        None,
             next_stream_id:     0,
             max_buffer_size:    DEFAULT_MAX_BUFFER_SIZE,
             stream_finished:    false,
-            streams:            Arc::new(Desync::new(HashMap::new())),
-            states:             Arc::new(Desync::new(HashMap::new())),
+            streams:            Arc::new(Desync::new(stream_collection)),
             notify:             Arc::new(Desync::new(()))
         }
     }
@@ -89,7 +102,8 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
        self.stream_finished = false;
         
        // Wake all of the streams so they poll the new stream
-       self.streams.desync(|streams| { streams.values_mut().for_each(|stream| { stream.ready.take().map(|ready| ready.notify()); }) });
+       let notify = Arc::clone(&self.notify);
+       self.streams.desync(move |streams| Self::wake_streams(notify, usize::MAX, streams));
     }
 
     ///
@@ -108,7 +122,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
         self.streams.desync(move |streams| {
             // For a new stream, we'll return the same symbols from the stream with the most full buffer
             let mut buffer: Option<&VecDeque<_>> = None;
-            for existing_stream_data in streams.values() {
+            for existing_stream_data in streams.streams.values() {
                 if existing_stream_data.buffer.len() > buffer.map(|buffer| buffer.len()).unwrap_or(0) {
                     buffer = Some(&existing_stream_data.buffer);
                 }
@@ -123,7 +137,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
             };
 
             // Store ready for use            
-            streams.insert(stream_id, stream_data);
+            streams.streams.insert(stream_id, stream_data);
         });
 
         stream_id
@@ -133,8 +147,10 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     /// Frees a stream from this core
     ///
     pub fn deallocate_stream(&mut self, stream_id: usize) {
-        self.streams.desync(move |streams| { streams.remove(&stream_id); });
-        self.states.desync(move |states| { states.remove(&stream_id); });
+        self.streams.desync(move |streams| { 
+            streams.streams.remove(&stream_id); 
+            streams.states.remove(&stream_id);
+        });
     }
 
     ///
@@ -152,7 +168,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
         let last_symbol = self.last_symbol.clone();
 
         // Set up the data structure
-        self.states.desync(move |states| {
+        self.streams.desync(move |streams| {
             // Set up the state data for this stream
             let new_state = StateData {
                 current_symbol: last_symbol,
@@ -160,7 +176,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
             };
 
             // Create the new state structure
-            states.insert(stream_id, new_state);
+            streams.states.insert(stream_id, new_state);
         });
 
         stream_id
@@ -171,9 +187,9 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     /// 
     /// Returns (new_data_available, stream_finished)
     ///
-    fn drain_stream(stream: &mut Source, buffer_to: &mut HashMap<usize, StreamData<Symbol>>, max_buffer_size: usize) -> (bool, bool, Option<Symbol>) {
+    fn drain_stream(stream: &mut Source, buffer_to: &mut InputStreamCollection<Symbol>, max_buffer_size: usize) -> (bool, bool, Option<Symbol>) {
         // Determine the maximum number of symbols to load for the streams
-        let biggest_stream_count    = buffer_to.values().map(|stream_data| stream_data.buffer.len()).max().unwrap_or(0);
+        let biggest_stream_count    = buffer_to.streams.values().map(|stream_data| stream_data.buffer.len()).max().unwrap_or(0);
         if biggest_stream_count >= max_buffer_size { return (false, false, None); }
         let mut remaining_symbols   = max_buffer_size - biggest_stream_count;
         let mut received_symbols    = vec![];
@@ -206,9 +222,9 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
             last_symbol = received_symbols.last().cloned();
 
             // Add the received symbols to the buffers
-            buffer_to.values_mut().skip(1)
+            buffer_to.streams.values_mut().skip(1)
                 .for_each(|stream_buffer| stream_buffer.buffer.extend(received_symbols.iter().cloned()));
-            buffer_to.values_mut().nth(0)
+            buffer_to.streams.values_mut().nth(0)
                 .map(|stream_buffer| stream_buffer.buffer.extend(received_symbols));
         }
 
@@ -218,12 +234,9 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     ///
     /// New data has arrived: wake all of the streams attached to this core
     ///
-    fn wake_streams(&mut self, stream_id: usize, streams: &mut HashMap<usize, StreamData<Symbol>>) {
-        // We'll send the notification to the notify desync
-        let notify = Arc::clone(&self.notify);
-
+    fn wake_streams(notify: Arc<Desync<()>>, stream_id: usize, streams: &mut InputStreamCollection<Symbol>) {
         // Work out the tasks that need notifications
-        let to_notify = streams.iter_mut().flat_map(|(id, stream)| {
+        let to_notify = streams.streams.iter_mut().flat_map(|(id, stream)| {
             if *id != stream_id {
                 stream.ready.take()
             } else {
@@ -242,16 +255,16 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     ///
     /// Updates the last symbol associated with this stream
     ///
-    fn update_last_symbol(&mut self, last_symbol: Symbol, stream_id: usize, states: &mut HashMap<usize, StateData<Symbol>>) {
+    fn update_last_symbol(&mut self, last_symbol: Symbol, stream_id: usize, streams: &mut InputStreamCollection<Symbol>) {
         // Update all of the active symbols for all of the states
-        states.values_mut()
+        streams.states.values_mut()
             .for_each(|state| {
                 state.current_symbol = Some(last_symbol.clone());
             });
         self.last_symbol    = Some(last_symbol);
 
         // Collect the states to notify
-        let to_notify       = states.iter_mut()
+        let to_notify       = streams.states.iter_mut()
             .flat_map(|(id, state)| {
                 if *id != stream_id {
                     state.ready.take()
@@ -280,7 +293,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
 
         streams.sync(|streams| {
             // If the stream has buffered data waiting, just return that
-            if let Some(stream) = streams.get_mut(&stream_id) {
+            if let Some(stream) = streams.streams.get_mut(&stream_id) {
                 // Any task for this stream is now invalid
                 stream.ready.take();
 
@@ -300,9 +313,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
                 .unwrap_or((false, false, None));
 
             // Update the last symbol if there's a new one
-            let states = Arc::clone(&self.states);
-            // ... todo
-            // states.desync(move |states| { new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol, stream_id, states)); });
+            new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol, stream_id, streams));
 
             // Mark as finished if the source stream is done
             if finished {
@@ -311,11 +322,11 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
 
             // Wake all of the other streams if new data has been loaded from the source stream
             if new_data_available {
-                self.wake_streams(stream_id, streams);
+                Self::wake_streams(Arc::clone(&self.notify), stream_id, streams);
             }
 
             // Buffer the next symbol
-            if let Some(mut stream) = streams.get_mut(&stream_id) {
+            if let Some(mut stream) = streams.streams.get_mut(&stream_id) {
                 // Try to read the next symbol from the current stream
                 if let Some(next_symbol) = stream.buffer.pop_front() {
                     return Ok(Async::Ready(Some(next_symbol)));
@@ -338,10 +349,10 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
     /// Polls a state stream for the next update
     ///
     pub fn poll_state(&mut self, stream_id: usize, poll_task: Task) -> Poll<Option<Symbol>, ()> {
-        let states = Arc::clone(&self.states);
+        let streams = Arc::clone(&self.streams);
 
-        states.sync(|states| {
-            if let Some(state) = states.get_mut(&stream_id) {
+        streams.sync(|streams| {
+            if let Some(state) = streams.states.get_mut(&stream_id) {
                 state.ready.take();
 
                 if let Some(value) = state.current_symbol.take() {
@@ -355,20 +366,14 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
                 return Ok(Async::Ready(None));
             }
 
-            // Attempt to read any new symbols from the input streams
-            let streams = Arc::clone(&self.streams);
-            let (new_data_available, finished, new_last_symbol) = streams.sync(|streams| {
-                // Read as many symbols as we can from the source stream and buffer them (this avoids too much round-robin signalling)
-                let max_buffer_size                                 = self.max_buffer_size; 
-                let (new_data_available, finished, new_last_symbol) = self.source_stream.as_mut()
-                    .map(|source_stream| Self::drain_stream(source_stream, streams, max_buffer_size))
-                    .unwrap_or((false, false, None));
-
-                (new_data_available, finished, new_last_symbol)
-            });
+            // Read as many symbols as we can from the source stream and buffer them (this avoids too much round-robin signalling)
+            let max_buffer_size                                 = self.max_buffer_size; 
+            let (new_data_available, finished, new_last_symbol) = self.source_stream.as_mut()
+                .map(|source_stream| Self::drain_stream(source_stream, streams, max_buffer_size))
+                .unwrap_or((false, false, None));
 
             // Update the last symbol if there's a new one
-            new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol, stream_id, states));
+            new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol, stream_id, streams));
 
             // Mark as finished if the source stream is done
             if finished {
@@ -377,11 +382,11 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
 
             // Wake all of the other streams if new data has been loaded from the source stream
             if new_data_available {
-                streams.sync(|streams| self.wake_streams(stream_id, streams));
+                Self::wake_streams(Arc::clone(&self.notify), stream_id, streams);
             }
 
             // Try to read the value from the stream again
-            if let Some(state) = states.get_mut(&stream_id) {
+            if let Some(state) = streams.states.get_mut(&stream_id) {
                 state.ready.take();
 
                 if let Some(value) = state.current_symbol.take() {
