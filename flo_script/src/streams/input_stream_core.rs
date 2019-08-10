@@ -184,10 +184,6 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
             streams.iter_mut()
                 .for_each(|(id, stream)| { if *id != stream_id { stream.ready.take().map(|ready| ready.notify()); } }); 
         });
-        self.states.desync(move |states| {
-            states.iter_mut()
-                .for_each(move |(id, state)| { if *id != stream_id { state.ready.take().map(|ready| ready.notify()); } });
-        });
     }
 
     ///
