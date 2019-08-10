@@ -29,6 +29,18 @@ enum ComputingScriptState {
 }
 
 ///
+/// How to interpret the result of the computed script
+///
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum ComputingScriptResultType {
+    /// A value that's directly computed
+    StraightValue,
+
+    /// A value that's derived from other state
+    DerivedValue
+}
+
+///
 /// A stream that pulls results from a computing script
 ///
 #[derive(Clone)]
@@ -38,6 +50,9 @@ pub struct ComputingScriptStream<Item> {
 
     /// The script that this will run
     script: Arc<CompileValue<SpannedExpr<Symbol>>>,
+
+    /// The type to look for in the result
+    result_type: ComputingScriptResultType,
 
     item: PhantomData<Item>
 }
@@ -51,19 +66,22 @@ where State<Item>: VmType {
         let symbol_type = Item::make_type(&*thread);
         let state_type  = State::<Item>::make_type(&*thread);
 
-        if script.typ == symbol_type {
+        let result_type = if script.typ == symbol_type {
             // Computed expression with no dependencies
+            ComputingScriptResultType::StraightValue
         } else if script.typ == state_type {
             // Computed expression with dependencies
+            ComputingScriptResultType::DerivedValue
         } else {
             // Not a valid type
             return Err(FloScriptError::IncorrectType);
-        }
+        };
 
         Ok(ComputingScriptStream {
-            root:   thread,
-            script: script,
-            item:   PhantomData
+            root:           thread,
+            script:         script,
+            result_type:    result_type,
+            item:           PhantomData
         })
     }
 }
