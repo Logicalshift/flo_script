@@ -58,7 +58,8 @@ pub struct InputStreamCore<Symbol: Send, Source> {
     /// The state streams that are attached to this core
     states: Arc<Desync<HashMap<usize, StateData<Symbol>>>>,
 
-    /// Desync where we send notifications of updates when they happen (this avoids issues with recursion when polls generate other polls)
+    /// Desync where we send notifications of updates when they happen 
+    // (this avoids issues with recursion when polls generate other polls, so that streams or states is not in use when we notify of an update)
     notify: Arc<Desync<()>>
 }
 
@@ -231,30 +232,40 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
         }).collect::<Vec<_>>();
 
         // Send to the notification desync
-        notify.desync(move |_| {
-            to_notify.into_iter()
-                .for_each(|task| task.notify())
-        });
+        if to_notify.len() > 0 {
+            notify.desync(move |_| {
+                to_notify.into_iter().for_each(|task| task.notify())
+            });
+        }
     }
 
     ///
     /// Updates the last symbol associated with this stream
     ///
-    fn update_last_symbol(&mut self, last_symbol: Symbol, stream_id: usize) {
-        self.states.desync(move |states| {
-            // Update all of the active symbols for all of the states
-            states.values_mut()
-                .for_each(|state| {
-                    state.current_symbol = Some(last_symbol.clone());
-                });
-
-            // Wake all of the states that are waiting for an update
-            states.iter_mut().for_each(|(id, state)| {
-                if *id != stream_id { 
-                    state.ready.take().map(|ready| ready.notify()); 
-                }
+    fn update_last_symbol(&mut self, last_symbol: Symbol, stream_id: usize, states: &mut HashMap<usize, StateData<Symbol>>) {
+        // Update all of the active symbols for all of the states
+        states.values_mut()
+            .for_each(|state| {
+                state.current_symbol = Some(last_symbol.clone());
             });
-        });
+        self.last_symbol    = Some(last_symbol);
+
+        // Collect the states to notify
+        let to_notify       = states.iter_mut()
+            .flat_map(|(id, state)| {
+                if *id != stream_id {
+                    state.ready.take()
+                } else {
+                    None
+                }
+            }).collect::<Vec<_>>();
+
+        // Perform the notifications in the background
+        if to_notify.len() > 0 {
+            self.notify.desync(move |_| {
+                to_notify.into_iter().for_each(|task| task.notify());
+            });
+        }
     }
 
     ///
@@ -289,7 +300,9 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
                 .unwrap_or((false, false, None));
 
             // Update the last symbol if there's a new one
-            new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol, stream_id));
+            let states = Arc::clone(&self.states);
+            // ... todo
+            // states.desync(move |states| { new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol, stream_id, states)); });
 
             // Mark as finished if the source stream is done
             if finished {
@@ -355,7 +368,7 @@ impl<Symbol: 'static+Clone+Send, Source: Send+Stream<Item=Symbol, Error=()>> Inp
             });
 
             // Update the last symbol if there's a new one
-            new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol, stream_id));
+            new_last_symbol.map(|new_last_symbol| self.update_last_symbol(new_last_symbol, stream_id, states));
 
             // Mark as finished if the source stream is done
             if finished {
