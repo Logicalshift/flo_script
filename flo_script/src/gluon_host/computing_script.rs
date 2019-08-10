@@ -42,19 +42,19 @@ pub struct ComputingScriptStream<Item> {
     item: PhantomData<Item>
 }
 
-impl<Item: VmType> ComputingScriptStream<Item> {
+impl<Item: 'static+VmType> ComputingScriptStream<Item> 
+where State<Item>: VmType {
     ///
     /// Creates a new computing thread that reads from the specified symbol
     ///
     pub fn new(thread: Arc<RootedThread>, script: Arc<CompileValue<SpannedExpr<Symbol>>>) -> FloScriptResult<ComputingScriptStream<Item>> {
         let symbol_type = Item::make_type(&*thread);
-        //let state_type  = State::<Item>::make_type(&*thread);
+        let state_type  = State::<Item>::make_type(&*thread);
 
         if script.typ == symbol_type {
             // Computed expression with no dependencies
-        /* } else if script.typ == state_type {
+        } else if script.typ == state_type {
             // Computed expression with dependencies
-        */
         } else {
             // Not a valid type
             return Err(FloScriptError::IncorrectType);
