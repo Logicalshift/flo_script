@@ -24,6 +24,29 @@ fn read_input_stream_as_state() {
 }
 
 #[test]
+fn state_script_with_const_value() {
+    // Declare some symbols
+    let output_y            = FloScriptSymbol::with_name("y");
+
+    // Create the script host
+    let host                = GluonScriptHost::new();
+    let editor              = host.editor();
+
+    // 'x' is an input state stream, 'y' is a state that adds one to the current state of 'x'
+    editor.clear();
+    editor.set_computing_script(output_y, r#"
+            1 + 2
+        "#);
+
+    // Get the stream from our state
+    let mut output_stream   = executor::spawn(host.notebook().receive_output::<i32>(output_y).expect("output stream"));
+
+    // Should send an update of '3' to the stream
+    let next_state_y        = output_stream.wait_stream().expect("at least one update").expect("no errors");
+    assert!(next_state_y == 3);
+}
+
+#[test]
 fn update_from_state_stream() {
     // Declare some symbols
     let input_x             = FloScriptSymbol::with_name("x");
