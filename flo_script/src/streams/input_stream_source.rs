@@ -1,4 +1,5 @@
 use super::input_stream::*;
+use super::state_stream::*;
 use super::input_stream_core::*;
 use super::super::error::*;
 
@@ -72,6 +73,17 @@ impl InputStreamSource {
         // Create a new stream from the core
         let core        = self.core()?;
         let new_stream  = InputStream::new(core);
+
+        Ok(new_stream)
+    }
+
+    ///
+    /// Creates a new stream reader for this input source
+    ///
+    pub fn read_as_state_stream<SymbolType: 'static+Clone+Send>(&mut self) -> FloScriptResult<StateStream<SymbolType, Box<dyn Stream<Item=SymbolType, Error=()>+Send>>> {
+        // Create a new stream from the core
+        let core        = self.core()?;
+        let new_stream  = StateStream::new(core);
 
         Ok(new_stream)
     }

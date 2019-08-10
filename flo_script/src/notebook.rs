@@ -49,4 +49,7 @@ pub trait FloScriptNotebook : Sized+Send+Sync {
 
     /// Creates an output stream to receive the results from a script associated with the specified symbol
     fn receive_output<OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>;
+
+    /// Receives the output stream for the specified symbol as a state stream (which will only return the most recently available symbol when polled)
+    fn receive_output_state<OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>;
 }

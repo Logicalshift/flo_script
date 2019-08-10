@@ -5,6 +5,25 @@ use futures::stream;
 use futures::executor;
 
 #[test]
+fn read_input_stream_as_state() {
+    let host                = GluonScriptHost::new();
+    let input_x             = FloScriptSymbol::with_name("x");
+
+    host.editor().set_input_type::<i32>(input_x);
+
+    // Start reading the stream before attaching some output
+    let mut output_x_stream = executor::spawn(host.notebook().receive_output_state::<i32>(input_x).expect("output state"));
+
+    // Send some data to the input
+    let input_data          = stream::iter_ok::<_, ()>(vec![1, 2, 3]);
+    host.notebook().attach_input(input_x, input_data).expect("attaching input");
+
+    // Only the most recent state is considered 'interesting' so we should just read '3' here
+    assert!(output_x_stream.wait_stream() == Some(Ok(3)));
+    assert!(output_x_stream.wait_stream() == None);
+}
+
+#[test]
 fn update_from_state_stream() {
     // Declare some symbols
     let input_x             = FloScriptSymbol::with_name("x");

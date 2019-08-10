@@ -84,6 +84,19 @@ impl GluonScriptNamespace {
     }
 
     ///
+    /// Creates a stream to read from a particular symbol using the state stream semantics
+    ///
+    pub fn read_state_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> {
+        use self::SymbolDefinition::*;
+
+        match self.symbols.get_mut(&symbol) {
+            None                        => Err(FloScriptError::UndefinedSymbol(symbol)),
+            Some(Input(input_source))   => Ok(Box::new(input_source.read_as_state_stream()?)),
+            Some(Namespace(_))          => Err(FloScriptError::CannotReadFromANamespace)
+        }
+    }
+
+    ///
     /// Attaches an input stream to a particular symbol
     ///
     pub fn attach_input<InputStream: 'static+Stream<Error=()>+Send>(&mut self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()> 

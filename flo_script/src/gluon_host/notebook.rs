@@ -56,4 +56,11 @@ impl FloScriptNotebook for GluonScriptNotebook {
             core.read_stream(symbol)
         })
     }
+
+    /// Receives the output stream for the specified symbol as a state stream (which will only return the most recently available symbol when polled)
+    fn receive_output_state<OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>> {
+        self.namespace.sync(move |core| {
+            core.read_state_stream(symbol)
+        })
+    }
 }
