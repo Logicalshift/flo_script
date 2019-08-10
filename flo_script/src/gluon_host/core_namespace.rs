@@ -4,7 +4,9 @@ use super::super::error::*;
 
 use desync::Desync;
 use gluon::*;
-use gluon_vm;
+use gluon::compiler_pipeline::{CompileValue, Compileable};
+use gluon_base::ast::{SpannedExpr};
+use gluon_base::symbol::{Symbol};
 use futures::*;
 
 use std::any::*;
@@ -20,7 +22,10 @@ enum SymbolDefinition {
     Input(InputStreamSource),
 
     /// Symbol represents a script that couldn't be compiled
-    ScriptError(gluon_vm::Error, String),
+    ScriptError(String),
+
+    /// Compiled computing expression
+    Computing(Arc<CompileValue<SpannedExpr<Symbol>>>),
 
     /// Symbol is a namespace
     Namespace(Arc<Desync<GluonScriptNamespace>>)
@@ -37,7 +42,7 @@ pub struct GluonScriptNamespace {
     streaming: Option<RootedThread>,
 
     /// The current thread for generating state updating scripts
-    state: Option<RootedThread>,
+    computing: Option<RootedThread>,
 
     /// Whether or not we'll run I/O operations in this namespace or not
     run_io: bool
@@ -51,7 +56,7 @@ impl GluonScriptNamespace {
         GluonScriptNamespace {
             symbols:    HashMap::new(),
             streaming:  None,
-            state:      None,
+            computing:  None,
             run_io:     false
         }
     }
@@ -62,7 +67,7 @@ impl GluonScriptNamespace {
     pub fn clear(&mut self) {
         self.symbols.clear();
         self.streaming  = None;
-        self.state      = None;
+        self.computing  = None;
     }
 
     ///
@@ -82,8 +87,9 @@ impl GluonScriptNamespace {
 
         match self.symbols.get_mut(&symbol) {
             None                                => Err(FloScriptError::UndefinedSymbol(symbol)),
-            Some(ScriptError(_, description))   => Err(FloScriptError::ScriptError(description.clone())),
+            Some(ScriptError(description))      => Err(FloScriptError::ScriptError(description.clone())),
             Some(Input(input_source))           => Ok(Box::new(input_source.read_as_stream()?)),
+            Some(Computing(expr))               => Err(FloScriptError::Unavailable("computing expressions not implemented yet".to_string())),
             Some(Namespace(_))                  => Err(FloScriptError::CannotReadFromANamespace)
         }
     }
@@ -96,8 +102,9 @@ impl GluonScriptNamespace {
 
         match self.symbols.get_mut(&symbol) {
             None                                => Err(FloScriptError::UndefinedSymbol(symbol)),
-            Some(ScriptError(_, description))   => Err(FloScriptError::ScriptError(description.clone())),
+            Some(ScriptError(description))      => Err(FloScriptError::ScriptError(description.clone())),
             Some(Input(input_source))           => Ok(Box::new(input_source.read_as_state_stream()?)),
+            Some(Computing(expr))               => Err(FloScriptError::Unavailable("computing expressions not implemented yet".to_string())),
             Some(Namespace(_))                  => Err(FloScriptError::CannotReadFromANamespace)
         }
     }
@@ -171,9 +178,37 @@ impl GluonScriptNamespace {
     }
 
     ///
+    /// Retrieves the computing thread for this namespace, if available
+    ///
+    fn computing_thread_mut(&mut self) -> &mut RootedThread {
+        // Create the thread if it does not already exist
+        if self.computing.is_none() {
+            self.computing = Some(new_vm());
+        }
+
+        // Return the computing thread
+        self.computing.as_mut().unwrap()
+    }
+
+    ///
     /// Loads a computing script into this namespace
     ///
     pub fn set_computing_script(&mut self, symbol: FloScriptSymbol, script: String) {
+        // Attempt to compile the expression
+        let computing_thread    = self.computing_thread_mut();
+        let mut compiler        = Compiler::new();
+        let compiled            = (&script).compile(&mut compiler, &computing_thread, &symbol.name().unwrap_or("".to_string()), &script, None);
 
+        // Report on the result
+        match compiled {
+            Ok(compiled)        => {
+                self.symbols.insert(symbol, SymbolDefinition::Computing(Arc::new(compiled)));
+            },
+            Err(fail)           => {
+                let error_string = fail.emit_string(&compiler.code_map())
+                    .unwrap_or("<Error while compiling (could not convert to string)>".to_string());
+                self.symbols.insert(symbol, SymbolDefinition::ScriptError(error_string));
+            }
+        }
     }
 }
