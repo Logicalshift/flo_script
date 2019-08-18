@@ -2,6 +2,7 @@ use super::error::*;
 use super::symbol::*;
 
 use futures::*;
+use gluon::vm::api::*;
 
 use std::any::*;
 
@@ -48,7 +49,12 @@ pub trait FloScriptNotebook : Sized+Send+Sync {
     where InputStream::Item: Clone+Send;
 
     /// Creates an output stream to receive the results from a script associated with the specified symbol
-    fn receive_output<OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>;
+    /// 
+    /// We currently limit ourselves to types that are supported in Gluon; once Rust fully supports specialization, it will be possible to
+    /// remove this limit in order to implement the notebook trait on other scripting engines (specialization would make it possible to
+    /// return type errors at runtime instead of compile time and avoid restricting the types here).
+    fn receive_output<'vm, OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>
+    where   OutputItem: for<'value> Getable<'vm, 'value> + VmType + Send + 'vm;
 
     /// Receives the output stream for the specified symbol as a state stream (which will only return the most recently available symbol when polled)
     fn receive_output_state<OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>;

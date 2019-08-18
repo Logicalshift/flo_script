@@ -3,6 +3,7 @@ use super::super::error::*;
 use super::super::symbol::*;
 use super::super::notebook::*;
 
+use gluon::vm::api::*;
 use desync::Desync;
 use futures::*;
 
@@ -51,7 +52,8 @@ impl FloScriptNotebook for GluonScriptNotebook {
     }
 
     /// Creates an output stream to receive the results from a script associated with the specified symbol
-    fn receive_output<OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>> {
+    fn receive_output<'vm, OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>
+    where   OutputItem: for<'value> Getable<'vm, 'value> + VmType + Send + 'vm {
         self.namespace.sync(move |core| {
             core.read_stream(symbol)
         })
