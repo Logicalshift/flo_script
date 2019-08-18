@@ -79,7 +79,7 @@ impl DerivedStateDependencies {
 /// what to re-evaluate when new data arrives via an input stream.
 ///
 #[derive(VmType, Getable, Pushable)]
-#[gluon(vm_type = "flo.state.DerivedState")]
+#[gluon(vm_type = "flo.computed.DerivedState")]
 pub struct DerivedState<TValue> {
     /// The value of this state
     value:          TValue,
@@ -147,9 +147,25 @@ fn wrap(a: ValueA) -> DerivedState<ValueA> {
 ///
 pub fn load(vm: &Thread) -> Result<ExternModule> {
     ExternModule::new(vm, record! {
-        type flo::state::DerivedState a => DerivedState<A>,
+        type flo::computed::DerivedState a  => DerivedState<A>,
 
-        wrap                            => primitive!(1, wrap),
-        flat_map                        => primitive!(2, flat_map)
+        wrap                                => primitive!(1, wrap),
+        flat_map                            => primitive!(2, flat_map)
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use gluon::*;
+    use gluon::import;
+    use gluon::vm::api::*;
+
+    #[test]
+    fn make_type_from_derived_state() {
+        let vm = new_vm();
+        import::add_extern_module(&vm, "flo.computed", load);
+
+        let _some_type = DerivedState::<i32>::make_type(&vm);
+    }
 }

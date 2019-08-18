@@ -203,7 +203,7 @@ impl GluonScriptNamespace {
         let thread          = new_vm();
 
         // Import the standard modules
-        import::add_extern_module(&thread, "flo.state", derived_state::load);
+        import::add_extern_module(&thread, "flo.computed", derived_state::load);
 
         thread
     }
