@@ -54,8 +54,11 @@ pub trait FloScriptNotebook : Sized+Send+Sync {
     /// remove this limit in order to implement the notebook trait on other scripting engines (specialization would make it possible to
     /// return type errors at runtime instead of compile time and avoid restricting the types here).
     fn receive_output<'vm, OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>
-    where   OutputItem: for<'value> Getable<'vm, 'value> + VmType + Send + 'vm;
+    where   OutputItem:             for<'value> Getable<'vm, 'value> + VmType + Send + 'vm,
+    <OutputItem as VmType>::Type:   Sized;
 
     /// Receives the output stream for the specified symbol as a state stream (which will only return the most recently available symbol when polled)
-    fn receive_output_state<OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>;
+    fn receive_output_state<'vm, OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>
+    where   OutputItem:             for<'value> Getable<'vm, 'value> + VmType + Send + 'vm,
+    <OutputItem as VmType>::Type:   Sized;
 }

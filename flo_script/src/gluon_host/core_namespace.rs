@@ -1,3 +1,4 @@
+use super::computing_script::*;
 use super::super::streams::*;
 use super::super::symbol::*;
 use super::super::error::*;
@@ -5,6 +6,7 @@ use super::super::error::*;
 use desync::Desync;
 use gluon::*;
 use gluon::compiler_pipeline::{CompileValue, Compileable};
+use gluon::vm::api::{VmType, Getable};
 use gluon::base::ast::{SpannedExpr};
 use gluon::base::symbol::{Symbol};
 use futures::*;
@@ -42,7 +44,7 @@ pub struct GluonScriptNamespace {
     streaming: Option<RootedThread>,
 
     /// The current thread for generating state updating scripts
-    computing: Option<RootedThread>,
+    computing: Option<Arc<RootedThread>>,
 
     /// Whether or not we'll run I/O operations in this namespace or not
     run_io: bool
@@ -82,14 +84,16 @@ impl GluonScriptNamespace {
     ///
     /// Creates a stream to read from a particular symbol
     ///
-    pub fn read_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> {
+    pub fn read_stream<'vm, Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>>
+    where   Symbol:             for<'value> Getable<'vm, 'value> + VmType + Send + 'vm,
+    <Symbol as VmType>::Type:   Sized {
         use self::SymbolDefinition::*;
 
         match self.symbols.get_mut(&symbol) {
             None                                => Err(FloScriptError::UndefinedSymbol(symbol)),
             Some(ScriptError(description))      => Err(FloScriptError::ScriptError(description.clone())),
             Some(Input(input_source))           => Ok(Box::new(input_source.read_as_stream()?)),
-            Some(Computing(expr))               => Err(FloScriptError::Unavailable("computing expressions not implemented yet".to_string())),
+            Some(Computing(expr))               => { let expr = Arc::clone(expr); Ok(Box::new(self.create_computing_stream(expr)?)) },
             Some(Namespace(_))                  => Err(FloScriptError::CannotReadFromANamespace)
         }
     }
@@ -97,16 +101,29 @@ impl GluonScriptNamespace {
     ///
     /// Creates a stream to read from a particular symbol using the state stream semantics
     ///
-    pub fn read_state_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> {
+    pub fn read_state_stream<'vm, Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> 
+    where   Symbol:             for<'value> Getable<'vm, 'value> + VmType + Send + 'vm,
+    <Symbol as VmType>::Type:   Sized {
         use self::SymbolDefinition::*;
 
         match self.symbols.get_mut(&symbol) {
             None                                => Err(FloScriptError::UndefinedSymbol(symbol)),
             Some(ScriptError(description))      => Err(FloScriptError::ScriptError(description.clone())),
             Some(Input(input_source))           => Ok(Box::new(input_source.read_as_state_stream()?)),
-            Some(Computing(expr))               => Err(FloScriptError::Unavailable("computing expressions not implemented yet".to_string())),
+            Some(Computing(expr))               => { let expr = Arc::clone(expr); Ok(Box::new(self.create_computing_stream(expr)?)) },
             Some(Namespace(_))                  => Err(FloScriptError::CannotReadFromANamespace)
         }
+    }
+
+    ///
+    /// Creates a new computing stream from a 
+    ///
+    pub fn create_computing_stream<'vm, Item: 'static+Clone+Send>(&mut self, expression: Arc<CompileValue<SpannedExpr<Symbol>>>) -> FloScriptResult<impl Stream<Item=Item, Error=()>>
+    where Item:             for<'value> Getable<'vm, 'value> + VmType + Send + 'vm,
+    <Item as VmType>::Type: Sized {
+        let thread = self.computing.get_or_insert_with(|| Arc::new(new_vm())).clone();
+
+        ComputingScriptStream::new(thread, expression, Compiler::default())
     }
 
     ///
@@ -180,14 +197,14 @@ impl GluonScriptNamespace {
     ///
     /// Retrieves the computing thread for this namespace, if available
     ///
-    fn computing_thread_mut(&mut self) -> &mut RootedThread {
+    fn computing_thread_mut(&mut self) -> &RootedThread {
         // Create the thread if it does not already exist
         if self.computing.is_none() {
-            self.computing = Some(new_vm());
+            self.computing = Some(Arc::new(new_vm()));
         }
 
         // Return the computing thread
-        self.computing.as_mut().unwrap()
+        self.computing.as_ref().unwrap()
     }
 
     ///
