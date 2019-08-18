@@ -15,8 +15,9 @@ type ValueB = OpaqueValue<RootedThread, B>;
 ///
 /// Structs come with some user data
 ///
-#[derive(Clone, Debug, Trace, Userdata)]
+#[derive(Userdata, VmType, Trace, Clone, Debug)]
 #[gluon_trace(skip)]
+#[gluon(vm_type = "flo.computed.DerivedStateDependencies")]
 struct DerivedStateDependencies {
     dependencies: Arc<HashSet<FloScriptSymbol>>
 }
@@ -79,7 +80,6 @@ impl DerivedStateDependencies {
 /// what to re-evaluate when new data arrives via an input stream.
 ///
 #[derive(VmType, Getable, Pushable)]
-#[gluon(vm_type = "flo.computed.DerivedState")]
 pub struct DerivedState<TValue> {
     /// The value of this state
     value:          TValue,
@@ -146,8 +146,12 @@ fn wrap(a: ValueA) -> DerivedState<ValueA> {
 /// Generates the flo.state extern module for a Gluon VM
 ///
 pub fn load(vm: &Thread) -> Result<ExternModule> {
+    vm.register_type::<DerivedStateDependencies>("flo.computed.DerivedStateDependencies", &[])?;
+    vm.register_type::<DerivedState<A>>("flo.computed.DerivedState", &["a"])?;
+
     ExternModule::new(vm, record! {
-        type flo::computed::DerivedState a  => DerivedState<A>,
+        type DerivedState a                 => DerivedState<A>,
+        type DerivedStateDependencies       => DerivedStateDependencies,
 
         wrap                                => primitive!(1, wrap),
         flat_map                            => primitive!(2, flat_map)
