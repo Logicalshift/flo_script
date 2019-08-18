@@ -1,4 +1,5 @@
 use super::computing_script::*;
+use super::derived_state;
 use super::super::streams::*;
 use super::super::symbol::*;
 use super::super::error::*;
@@ -121,7 +122,7 @@ impl GluonScriptNamespace {
     pub fn create_computing_stream<'vm, Item: 'static+Clone+Send>(&mut self, expression: Arc<CompileValue<SpannedExpr<Symbol>>>) -> FloScriptResult<impl Stream<Item=Item, Error=()>>
     where Item:             for<'value> Getable<'vm, 'value> + VmType + Send + 'vm,
     <Item as VmType>::Type: Sized {
-        let thread = self.computing.get_or_insert_with(|| Arc::new(new_vm())).clone();
+        let thread = self.get_computing_thread();
 
         ComputingScriptStream::new(thread, expression, Compiler::default())
     }
@@ -190,21 +191,36 @@ impl GluonScriptNamespace {
     ///
     /// Loads a streaming script into this namespace
     ///
-    pub fn set_streaming_script(&mut self, symbol: FloScriptSymbol, script: String) {
+    pub fn set_streaming_script(&mut self, _symbol: FloScriptSymbol, script: String) {
 
+    }
+
+    ///
+    /// Creates a new thread for this namespace
+    ///
+    fn create_thread(&self) -> RootedThread {
+        // Create the thread as a new VM
+        let thread          = new_vm();
+
+        // Import the standard modules
+        import::add_extern_module(&thread, "flo.state", derived_state::load);
+
+        thread
     }
 
     ///
     /// Retrieves the computing thread for this namespace, if available
     ///
-    fn computing_thread_mut(&mut self) -> &RootedThread {
-        // Create the thread if it does not already exist
-        if self.computing.is_none() {
-            self.computing = Some(Arc::new(new_vm()));
-        }
+    fn get_computing_thread(&mut self) -> Arc<RootedThread> {
+        let thread          = self.computing.clone();
 
-        // Return the computing thread
-        self.computing.as_ref().unwrap()
+        if let Some(thread) = thread {
+            thread
+        } else {
+            let thread      = Arc::new(self.create_thread());
+            self.computing  = Some(Arc::clone(&thread));
+            thread
+        }
     }
 
     ///
@@ -212,7 +228,7 @@ impl GluonScriptNamespace {
     ///
     pub fn set_computing_script(&mut self, symbol: FloScriptSymbol, script: String) {
         // Attempt to compile the expression
-        let computing_thread    = self.computing_thread_mut();
+        let computing_thread    = self.get_computing_thread();
         let mut compiler        = Compiler::new();
         let compiled            = (&script).compile(&mut compiler, &computing_thread, &symbol.name().unwrap_or("".to_string()), &script, None);
 
