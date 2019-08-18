@@ -1,3 +1,4 @@
+// #![feature(specialization)] - in nightly builds we can remove the hard dependency on Gluon and use the traits to implement other scripting languages
 #![deny(bare_trait_objects)]
 
 #[macro_use] extern crate lazy_static;

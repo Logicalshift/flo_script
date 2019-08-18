@@ -4,7 +4,7 @@ use gluon::*;
 use gluon::compiler_pipeline::*;
 use gluon::vm::ExternModule;
 use gluon::import;
-use gluon_vm::api::*;
+use gluon::vm::api::*;
 
 use futures::*;
 use futures::executor;

@@ -5,8 +5,8 @@ use super::super::error::*;
 use desync::Desync;
 use gluon::*;
 use gluon::compiler_pipeline::{CompileValue, Compileable};
-use gluon_base::ast::{SpannedExpr};
-use gluon_base::symbol::{Symbol};
+use gluon::base::ast::{SpannedExpr};
+use gluon::base::symbol::{Symbol};
 use futures::*;
 
 use std::any::*;

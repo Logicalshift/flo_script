@@ -3,9 +3,9 @@ use super::super::error::*;
 
 use gluon::{RootedThread, Compiler};
 use gluon::compiler_pipeline::{CompileValue, Executable};
-use gluon_vm::api::{VmType};
-use gluon_base::ast::{SpannedExpr};
-use gluon_base::symbol::{Symbol};
+use gluon::vm::api::{VmType};
+use gluon::base::ast::{SpannedExpr};
+use gluon::base::symbol::{Symbol};
 use futures::*;
 
 use std::sync::*;

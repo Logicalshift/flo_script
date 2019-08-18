@@ -1,9 +1,9 @@
 use super::super::symbol::*;
 
 use gluon::{RootedThread, Thread};
-use gluon_vm::{ExternModule, Result};
-use gluon_vm::api::{FunctionRef, OpaqueValue, UserdataValue};
-use gluon_vm::api::generic::{A, B};
+use gluon::vm::{ExternModule, Result};
+use gluon::vm::api::{FunctionRef, OpaqueValue, UserdataValue};
+use gluon::vm::api::generic::{A, B};
 
 use std::iter;
 use std::sync::*;
