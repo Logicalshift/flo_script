@@ -164,12 +164,14 @@ mod test {
     use gluon::*;
     use gluon::import;
     use gluon::vm::api::*;
+    use gluon::vm::primitives;
 
     #[test]
     fn make_type_from_derived_state() {
         let vm = new_vm();
         import::add_extern_module(&vm, "flo.computed", load);
 
+        let _some_type = primitives::DirEntry::make_type(&vm);
         let _some_type = DerivedState::<i32>::make_type(&vm);
     }
 }
