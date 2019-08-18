@@ -3,7 +3,7 @@ use super::super::error::*;
 
 use gluon::{RootedThread, Compiler};
 use gluon::compiler_pipeline::{CompileValue, Executable};
-use gluon::vm::api::{VmType};
+use gluon::vm::api::{VmType, Getable};
 use gluon::base::ast::{SpannedExpr};
 use gluon::base::symbol::{Symbol};
 use futures::*;
@@ -95,7 +95,8 @@ where DerivedState<Item>: VmType {
     }
 }
 
-impl<Item> ComputingScriptStream<Item> {
+impl<'vm, Item> ComputingScriptStream<Item> 
+where   Item: for<'value> Getable<'vm, 'value> + VmType + Send + 'vm {
     fn poll_start_script(&mut self) -> Poll<Option<Item>, ()> {
         unimplemented!()
     }
@@ -109,7 +110,8 @@ impl<Item> ComputingScriptStream<Item> {
     }
 }
 
-impl<Item> Stream for ComputingScriptStream<Item> {
+impl<'vm, Item> Stream for ComputingScriptStream<Item>
+where   Item: for<'value> Getable<'vm, 'value> + VmType + Send + 'vm {
     type Item = Item;
     type Error = ();
 
