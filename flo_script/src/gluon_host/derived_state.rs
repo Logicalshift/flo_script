@@ -171,6 +171,11 @@ mod test {
         let vm = new_vm();
         import::add_extern_module(&vm, "flo.computed", load);
 
+        Compiler::default().run_expr::<()>(&vm, "importfs", "import! std.fs\n()").unwrap();
+        Compiler::default().run_expr::<()>(&vm, "importcomputed", "import! flo.computed\n()").unwrap();
+
+        let _some_type = IO::<i32>::make_type(&vm);
+        let _some_type = UserdataValue::<primitives::DirEntry>::make_type(&vm);
         let _some_type = primitives::DirEntry::make_type(&vm);
         let _some_type = DerivedState::<i32>::make_type(&vm);
     }
