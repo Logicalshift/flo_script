@@ -171,12 +171,26 @@ mod test {
         let vm = new_vm();
         import::add_extern_module(&vm, "flo.computed", load);
 
+        // Gluon only imports user data types if the corresponding module has previously been imported
         Compiler::default().run_expr::<()>(&vm, "importfs", "import! std.fs\n()").unwrap();
         Compiler::default().run_expr::<()>(&vm, "importcomputed", "import! flo.computed\n()").unwrap();
 
+        // IO monad
         let _some_type = IO::<i32>::make_type(&vm);
+
+        // DirEntry is defined in the standard gluon library: it illustrates this issue does is not a bug with how DerivedState is declared
         let _some_type = UserdataValue::<primitives::DirEntry>::make_type(&vm);
         let _some_type = primitives::DirEntry::make_type(&vm);
+
+        // Ultimate goal of this test: we should be able to get the type for DerivedState
         let _some_type = DerivedState::<i32>::make_type(&vm);
+    }
+
+    #[test]
+    #[should_panic]
+    fn user_data_import_issue_not_fixed() {
+        // Without the import! side-effects on the VM, user data types are missing (if this test starts failing, we should be able to remove the import! above and when loading flo.computed)
+        let vm = new_vm();
+        let _some_type = UserdataValue::<primitives::DirEntry>::make_type(&vm);
     }
 }
