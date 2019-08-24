@@ -53,12 +53,12 @@ pub trait FloScriptNotebook : Sized+Send+Sync {
     /// We currently limit ourselves to types that are supported in Gluon; once Rust fully supports specialization, it will be possible to
     /// remove this limit in order to implement the notebook trait on other scripting engines (specialization would make it possible to
     /// return type errors at runtime instead of compile time and avoid restricting the types here).
-    fn receive_output<'vm, OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>
-    where   OutputItem:             for<'value> Getable<'vm, 'value> + VmType + Send + 'static,
+    fn receive_output<OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>
+    where   OutputItem:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <OutputItem as VmType>::Type:   Sized;
 
     /// Receives the output stream for the specified symbol as a state stream (which will only return the most recently available symbol when polled)
-    fn receive_output_state<'vm, OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>
-    where   OutputItem:             for<'value> Getable<'vm, 'value> + VmType + Send + 'static,
+    fn receive_output_state<OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>
+    where   OutputItem:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <OutputItem as VmType>::Type:   Sized;
 }

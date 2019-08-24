@@ -83,8 +83,8 @@ impl GluonScriptNamespace {
     ///
     /// Creates a stream to read from a particular symbol
     ///
-    pub fn read_stream<'vm, Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>>
-    where   Symbol:             for<'value> Getable<'vm, 'value> + VmType + Send + 'static,
+    pub fn read_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>>
+    where   Symbol:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <Symbol as VmType>::Type:   Sized {
         use self::SymbolDefinition::*;
 
@@ -100,8 +100,8 @@ impl GluonScriptNamespace {
     ///
     /// Creates a stream to read from a particular symbol using the state stream semantics
     ///
-    pub fn read_state_stream<'vm, Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> 
-    where   Symbol:             for<'value> Getable<'vm, 'value> + VmType + Send + 'vm,
+    pub fn read_state_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> 
+    where   Symbol:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <Symbol as VmType>::Type:   Sized {
         use self::SymbolDefinition::*;
 
@@ -117,8 +117,8 @@ impl GluonScriptNamespace {
     ///
     /// Creates a new computing stream from a 
     ///
-    pub fn create_computing_stream<'vm, Item: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol, expression: Arc<String>) -> FloScriptResult<impl Stream<Item=Item, Error=()>>
-    where Item:             for<'value> Getable<'vm, 'value> + VmType + Send + 'static,
+    pub fn create_computing_stream<Item: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol, expression: Arc<String>) -> FloScriptResult<impl Stream<Item=Item, Error=()>>
+    where Item:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <Item as VmType>::Type: Sized {
         let computing_thread    = self.get_computing_thread();
         let mut compiler        = Compiler::default();
