@@ -22,6 +22,9 @@ enum SymbolDefinition {
     /// Symbol is an input stream
     Input(InputStreamSource),
 
+    /// An instantiated script acting as an input source
+    ActiveScript(InputStreamSource),
+
     /// Symbol represents a script that couldn't be compiled
     ScriptError(String),
 
@@ -91,7 +94,8 @@ impl GluonScriptNamespace {
         match self.symbols.get_mut(&symbol) {
             None                                => Err(FloScriptError::UndefinedSymbol(symbol)),
             Some(ScriptError(description))      => Err(FloScriptError::ScriptError(description.clone())),
-            Some(Input(input_source))           => Ok(Box::new(input_source.read_as_stream()?)),
+            Some(Input(input_source))           |
+            Some(ActiveScript(input_source))    => Ok(Box::new(input_source.read_as_stream()?)),
             Some(Computing(expr))               => { let expr = Arc::clone(expr); Ok(Box::new(self.create_computing_stream(symbol, expr)?)) },
             Some(Namespace(_))                  => Err(FloScriptError::CannotReadFromANamespace)
         }
@@ -108,14 +112,15 @@ impl GluonScriptNamespace {
         match self.symbols.get_mut(&symbol) {
             None                                => Err(FloScriptError::UndefinedSymbol(symbol)),
             Some(ScriptError(description))      => Err(FloScriptError::ScriptError(description.clone())),
-            Some(Input(input_source))           => Ok(Box::new(input_source.read_as_state_stream()?)),
+            Some(Input(input_source))           |
+            Some(ActiveScript(input_source))    => Ok(Box::new(input_source.read_as_state_stream()?)),
             Some(Computing(expr))               => { let expr = Arc::clone(expr); Ok(Box::new(self.create_computing_stream(symbol, expr)?)) },
             Some(Namespace(_))                  => Err(FloScriptError::CannotReadFromANamespace)
         }
     }
 
     ///
-    /// Creates a new computing stream from a 
+    /// Creates a new computing stream from a script, storing the result as a new input stream associated with the specified symbol
     ///
     pub fn create_computing_stream<Item: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol, expression: Arc<String>) -> FloScriptResult<impl Stream<Item=Item, Error=()>>
     where Item:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
@@ -127,11 +132,30 @@ impl GluonScriptNamespace {
         // Report on the result
         match expression {
             Ok(compiled)        => {
-                ComputingScriptStream::new(computing_thread, compiled, Compiler::default())
+                // Create as an input stream
+                let stream = ComputingScriptStream::<Item>::new(computing_thread, compiled, Compiler::default())?;
+
+                // This will become the input stream for the specified symbol
+                let mut input_stream_source = InputStreamSource::new(TypeId::of::<Item>());
+                input_stream_source.attach(stream)?;
+
+                // The output is read as a state stream from this input
+                let result_stream = input_stream_source.read_as_state_stream()?;
+
+                // Update the symbol to be an active stream
+                self.symbols.insert(symbol, SymbolDefinition::ActiveScript(input_stream_source));
+
+                Ok(result_stream)
             },
             Err(fail)           => {
+                // Generate a script error
                 let error_string = fail.emit_string(&compiler.code_map())
                     .unwrap_or("<Error while compiling (could not convert to string)>".to_string());
+
+                // Don't try to run this script again
+                self.symbols.insert(symbol, SymbolDefinition::ScriptError(error_string.clone()));
+
+                // Return as the result
                 Err(FloScriptError::ScriptError(error_string))
             }
         }
