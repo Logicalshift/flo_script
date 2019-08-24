@@ -53,7 +53,7 @@ impl FloScriptNotebook for GluonScriptNotebook {
 
     /// Creates an output stream to receive the results from a script associated with the specified symbol
     fn receive_output<'vm, OutputItem: 'static+Clone+Send>(&self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=OutputItem, Error=()>+Send>>
-    where   OutputItem:             for<'value> Getable<'vm, 'value> + VmType + Send + 'vm,
+    where   OutputItem:             for<'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <OutputItem as VmType>::Type:   Sized {
         self.namespace.sync(move |core| {
             core.read_stream(symbol)

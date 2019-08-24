@@ -6,10 +6,8 @@ use super::super::error::*;
 
 use desync::Desync;
 use gluon::*;
-use gluon::compiler_pipeline::{CompileValue, Compileable};
+use gluon::compiler_pipeline::{Compileable};
 use gluon::vm::api::{VmType, Getable};
-use gluon::base::ast::{SpannedExpr};
-use gluon::base::symbol::{Symbol};
 use futures::*;
 
 use std::any::*;
@@ -28,7 +26,7 @@ enum SymbolDefinition {
     ScriptError(String),
 
     /// Compiled computing expression
-    Computing(Arc<CompileValue<SpannedExpr<Symbol>>>),
+    Computing(Arc<String>),
 
     /// Symbol is a namespace
     Namespace(Arc<Desync<GluonScriptNamespace>>)
@@ -86,7 +84,7 @@ impl GluonScriptNamespace {
     /// Creates a stream to read from a particular symbol
     ///
     pub fn read_stream<'vm, Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>>
-    where   Symbol:             for<'value> Getable<'vm, 'value> + VmType + Send + 'vm,
+    where   Symbol:             for<'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <Symbol as VmType>::Type:   Sized {
         use self::SymbolDefinition::*;
 
@@ -94,7 +92,7 @@ impl GluonScriptNamespace {
             None                                => Err(FloScriptError::UndefinedSymbol(symbol)),
             Some(ScriptError(description))      => Err(FloScriptError::ScriptError(description.clone())),
             Some(Input(input_source))           => Ok(Box::new(input_source.read_as_stream()?)),
-            Some(Computing(expr))               => { let expr = Arc::clone(expr); Ok(Box::new(self.create_computing_stream(expr)?)) },
+            Some(Computing(expr))               => { let expr = Arc::clone(expr); Ok(Box::new(self.create_computing_stream(symbol, expr)?)) },
             Some(Namespace(_))                  => Err(FloScriptError::CannotReadFromANamespace)
         }
     }
@@ -111,7 +109,7 @@ impl GluonScriptNamespace {
             None                                => Err(FloScriptError::UndefinedSymbol(symbol)),
             Some(ScriptError(description))      => Err(FloScriptError::ScriptError(description.clone())),
             Some(Input(input_source))           => Ok(Box::new(input_source.read_as_state_stream()?)),
-            Some(Computing(expr))               => { let expr = Arc::clone(expr); Ok(Box::new(self.create_computing_stream(expr)?)) },
+            Some(Computing(expr))               => { let expr = Arc::clone(expr); Ok(Box::new(self.create_computing_stream(symbol, expr)?)) },
             Some(Namespace(_))                  => Err(FloScriptError::CannotReadFromANamespace)
         }
     }
@@ -119,12 +117,24 @@ impl GluonScriptNamespace {
     ///
     /// Creates a new computing stream from a 
     ///
-    pub fn create_computing_stream<'vm, Item: 'static+Clone+Send>(&mut self, expression: Arc<CompileValue<SpannedExpr<Symbol>>>) -> FloScriptResult<impl Stream<Item=Item, Error=()>>
-    where Item:             for<'value> Getable<'vm, 'value> + VmType + Send + 'vm,
+    pub fn create_computing_stream<'vm, Item: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol, expression: Arc<String>) -> FloScriptResult<impl Stream<Item=Item, Error=()>>
+    where Item:             for<'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <Item as VmType>::Type: Sized {
-        let thread = self.get_computing_thread();
+        let computing_thread    = self.get_computing_thread();
+        let mut compiler        = Compiler::default();
+        let expression          = (&*expression).compile(&mut compiler, &computing_thread, &symbol.name().unwrap_or("".to_string()), &*expression, None);
 
-        ComputingScriptStream::new(thread, expression, Compiler::default())
+        // Report on the result
+        match expression {
+            Ok(compiled)        => {
+                ComputingScriptStream::new(computing_thread, compiled, Compiler::default())
+            },
+            Err(fail)           => {
+                let error_string = fail.emit_string(&compiler.code_map())
+                    .unwrap_or("<Error while compiling (could not convert to string)>".to_string());
+                Err(FloScriptError::ScriptError(error_string))
+            }
+        }
     }
 
     ///
@@ -230,21 +240,6 @@ impl GluonScriptNamespace {
     /// Loads a computing script into this namespace
     ///
     pub fn set_computing_script(&mut self, symbol: FloScriptSymbol, script: String) {
-        // Attempt to compile the expression
-        let computing_thread    = self.get_computing_thread();
-        let mut compiler        = Compiler::new();
-        let compiled            = (&script).compile(&mut compiler, &computing_thread, &symbol.name().unwrap_or("".to_string()), &script, None);
-
-        // Report on the result
-        match compiled {
-            Ok(compiled)        => {
-                self.symbols.insert(symbol, SymbolDefinition::Computing(Arc::new(compiled)));
-            },
-            Err(fail)           => {
-                let error_string = fail.emit_string(&compiler.code_map())
-                    .unwrap_or("<Error while compiling (could not convert to string)>".to_string());
-                self.symbols.insert(symbol, SymbolDefinition::ScriptError(error_string));
-            }
-        }
+        self.symbols.insert(symbol, SymbolDefinition::Computing(Arc::new(script)));
     }
 }
