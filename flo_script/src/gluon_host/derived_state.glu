@@ -8,18 +8,31 @@ let flat_map out_state in_state : forall b a . (a -> DerivedState b) -> DerivedS
         let (state_data, a_value)   = in_state.resolve state_data
         let out_state               = out_state a_value
         out_state.resolve state_data
-    {
-        resolve
-    }
+    { resolve }
 
 /// Wraps a constant value in a DerivedState monad
-let wrap a = 
+let wrap a : forall a . a -> DerivedState a = 
     let resolve state_data = (state_data, a)
-    {
-        resolve
-    }
+    { resolve }
+
+/// DerivedState functor
+let functor: Functor DerivedState = {
+    map = \f -> flat_map (\x -> wrap (f x))
+}
+
+/// DerivedState applicative
+let applicative: Applicative DerivedState = 
+    let apply f x = flat_map (\g -> flat_map (\y -> wrap (g y)) x) f
+    { functor, apply, wrap }
+
+/// DerivedState monad
+let monad: Monad DerivedState =
+    { applicative, flat_map }
 
 {
     flat_map,
-    wrap
+    wrap,
+    functor,
+    applicative,
+    monad
 }
