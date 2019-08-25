@@ -1,3 +1,4 @@
+use super::core_namespace::*;
 use super::super::symbol::*;
 
 use gluon::{Thread, Compiler};
@@ -5,18 +6,34 @@ use gluon::vm::{ExternModule, Result, Variants};
 use gluon::vm::api::{VmType, FunctionRef, ValueRef, ActiveThread, Getable, Pushable, UserdataValue};
 use gluon::vm::api::generic::{A};
 use gluon::import;
+use desync::{Desync};
 
+use std::sync::*;
+use std::result;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 use std::collections::{HashSet};
 
 ///
 /// Data passed through the derived state monad
 ///
-#[derive(Userdata, VmType, Trace, Debug)]
+#[derive(Userdata, VmType, Trace)]
 #[gluon_trace(skip)]
 #[gluon(vm_type = "flo.computed.prim.DerivedStateData")]
 pub struct DerivedStateData {
-    // The symbols that the last value of this state depended upon
+    /// The namespace that this state is for
+    namespace: Arc<Desync<GluonScriptNamespace>>,
+
+    /// The symbols that the last value of this state depended upon
     dependencies: HashSet<FloScriptSymbol>
+}
+
+impl Debug for DerivedStateData {
+    fn fmt(&self, formatter: &mut Formatter) -> result::Result<(), fmt::Error> {
+        write!(formatter, "DerivedStateData {{ namespace: <>, dependencies: {:?} }}", self.dependencies)?;
+
+        Ok(())
+    }
 }
 
 type ResolveFunction<'vm, TValue> = FunctionRef<'vm, fn(UserdataValue<DerivedStateData>) -> (UserdataValue<DerivedStateData>, TValue)>;
