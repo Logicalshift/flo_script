@@ -105,7 +105,10 @@ pub fn load_flo_computed(vm: &Thread) -> Result<()> {
 
     // And the gluon module
     let flo_computed    = include_str!("derived_state.glu");
-    Compiler::default().load_script(vm, "flo.computed", flo_computed).expect("load flo.computed");
+    let mut compiler    = Compiler::default();
+    compiler.load_script(vm, "flo.computed", flo_computed)
+        .map_err(|err| err.emit_string(&compiler.code_map()))
+        .expect("load flo.computed");
 
     Ok(())
 }
