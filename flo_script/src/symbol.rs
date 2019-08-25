@@ -69,4 +69,13 @@ impl FloScriptSymbol {
         let symbol_to_name = SYMBOL_TO_NAME.lock().unwrap();
         symbol_to_name.get(&self.id).cloned()
     }
+
+    ///
+    /// Retrieves a number representing the unique ID of this symbol
+    /// 
+    /// Note that symbol IDs are only valid for a single session
+    ///
+    pub fn id(&self) -> u64 {
+        self.id
+    }
 }
