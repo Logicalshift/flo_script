@@ -2,7 +2,7 @@ use super::super::symbol::*;
 
 use gluon::{RootedThread, Thread};
 use gluon::vm::{ExternModule, Result, Variants};
-use gluon::vm::api::{FunctionRef, ValueRef, ActiveThread, OpaqueValue, Getable, Pushable, UserdataValue};
+use gluon::vm::api::{VmType, FunctionRef, ValueRef, ActiveThread, OpaqueValue, Getable, Pushable, UserdataValue};
 use gluon::vm::api::generic::{A, B};
 
 use std::collections::{HashSet};
@@ -56,9 +56,20 @@ impl<'vm, 'value, TValue> Getable<'vm, 'value> for DerivedState<'vm, TValue> {
     }
 }
 
-impl<'vm, TValue> Pushable<'vm> for DerivedState<'vm, TValue> {
+// Similarly, the codegen can't deal with a functionref when generating a pushable item
+impl<'vm, TValue: 'static+VmType+Sized> Pushable<'vm> for DerivedState<'vm, TValue>
+where TValue::Type : Sized {
     fn push(self, context: &mut ActiveThread<'vm>) -> Result<()> {
-        unimplemented!()
+        let vm = context.thread();
+
+        // Push the field values
+        ResolveFunction::push(self.resolve, context)?;
+
+        // Turn into a record
+        let field_names = [vm.global_env().intern("resolve")?];
+        context.context().push_new_record(vm, 1, &field_names)?;
+
+        Ok(())
     }
 }
 
