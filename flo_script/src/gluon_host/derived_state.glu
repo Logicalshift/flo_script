@@ -2,5 +2,24 @@
 
 let prim @ { DerivedState, DerivedStateData } = import! flo.computed.prim
 
+/// Flat_map implementation for the DerivedState type
+let flat_map out_state in_state : forall b a . (a -> DerivedState b) -> DerivedState a -> DerivedState b =
+    let resolve state_data : DerivedStateData -> (DerivedStateData, b) = 
+        let (state_data, a_value)   = in_state.resolve state_data
+        let out_state               = out_state a_value
+        out_state.resolve state_data
+    {
+        resolve
+    }
+
+/// Wraps a constant value in a DerivedState monad
+let wrap a = 
+    let resolve state_data = (state_data, a)
+    {
+        resolve
+    }
+
 {
+    flat_map,
+    wrap
 }
