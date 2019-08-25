@@ -1,15 +1,12 @@
 use super::super::symbol::*;
 
-use gluon::{RootedThread, Thread, Compiler};
+use gluon::{Thread, Compiler};
 use gluon::vm::{ExternModule, Result, Variants};
-use gluon::vm::api::{VmType, FunctionRef, ValueRef, ActiveThread, OpaqueValue, Getable, Pushable, UserdataValue};
-use gluon::vm::api::generic::{A, B};
+use gluon::vm::api::{VmType, FunctionRef, ValueRef, ActiveThread, Getable, Pushable, UserdataValue};
+use gluon::vm::api::generic::{A};
 use gluon::import;
 
 use std::collections::{HashSet};
-
-type ValueA = OpaqueValue<RootedThread, A>;
-type ValueB = OpaqueValue<RootedThread, B>;
 
 ///
 /// Data passed through the derived state monad
@@ -71,15 +68,6 @@ where TValue::Type : Sized {
         context.context().push_new_record(vm, 1, &field_names)?;
 
         Ok(())
-    }
-}
-
-impl<'vm, TValue> DerivedState<'vm, TValue> {
-    ///
-    /// Creates a new state that is not dependent on any input states
-    ///
-    pub fn new(value: TValue) -> DerivedState<'vm, TValue> {
-        unimplemented!()
     }
 }
 
