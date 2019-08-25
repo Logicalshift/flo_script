@@ -237,7 +237,7 @@ impl GluonScriptNamespace {
         let thread          = new_vm();
 
         // Import the standard modules
-        import::add_extern_module(&thread, "flo.computed.prim", derived_state::load);
+        derived_state::load_flo_computed(&thread).expect("Load flo.computed module");
 
         // To make user data types available to Rust, we need to invoke the side-effects of the import! macro inside gluon
         Compiler::default().run_expr::<()>(&thread, "import_flo_computed", "import! flo.computed\n()").unwrap();

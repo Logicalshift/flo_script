@@ -1,9 +1,10 @@
 use super::super::symbol::*;
 
-use gluon::{RootedThread, Thread};
+use gluon::{RootedThread, Thread, Compiler};
 use gluon::vm::{ExternModule, Result, Variants};
 use gluon::vm::api::{VmType, FunctionRef, ValueRef, ActiveThread, OpaqueValue, Getable, Pushable, UserdataValue};
 use gluon::vm::api::generic::{A, B};
+use gluon::import;
 
 use std::collections::{HashSet};
 
@@ -85,7 +86,7 @@ impl<'vm, TValue> DerivedState<'vm, TValue> {
 ///
 /// Generates the flo.computed.prim extern module for a Gluon VM
 ///
-pub fn load(vm: &Thread) -> Result<ExternModule> {
+fn load_prim(vm: &Thread) -> Result<ExternModule> {
     vm.register_type::<DerivedStateData>("flo.computed.prim.DerivedStateData", &[])?;
     vm.register_type::<DerivedState<A>>("flo.computed.prim.DerivedState", &["a"])?;
 
@@ -95,22 +96,35 @@ pub fn load(vm: &Thread) -> Result<ExternModule> {
     })
 }
 
+///
+/// Generates the flo.computed extern module for a Gluon VM
+///
+pub fn load_flo_computed(vm: &Thread) -> Result<()> {
+    // Add the primitives module
+    import::add_extern_module(&vm, "flo.computed.prim", load_prim);
+
+    // And the gluon module
+    let flo_computed    = include_str!("derived_state.glu");
+    Compiler::default().load_script(vm, "flo.computed", flo_computed).expect("load flo.computed");
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use gluon::*;
-    use gluon::import;
     use gluon::vm::api::*;
     use gluon::vm::primitives;
 
     #[test]
     fn make_type_from_derived_state() {
         let vm = new_vm();
-        import::add_extern_module(&vm, "flo.computed.prim", load);
+        load_flo_computed(&vm).unwrap();
 
         // Gluon only imports user data types if the corresponding module has previously been imported
         Compiler::default().run_expr::<()>(&vm, "importfs", "import! std.fs\n()").unwrap();
-        Compiler::default().run_expr::<()>(&vm, "importcomputed", "import! flo.computed.prim\n()").unwrap();
+        Compiler::default().run_expr::<()>(&vm, "importcomputed", "import! flo.computed\n()").unwrap();
 
         // IO monad
         let _some_type = IO::<i32>::make_type(&vm);
