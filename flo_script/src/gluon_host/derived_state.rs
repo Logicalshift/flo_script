@@ -1,77 +1,27 @@
 use super::super::symbol::*;
 
 use gluon::{RootedThread, Thread};
-use gluon::vm::{ExternModule, Result};
-use gluon::vm::api::{FunctionRef, OpaqueValue, UserdataValue};
+use gluon::vm::{ExternModule, Result, Variants};
+use gluon::vm::api::{FunctionRef, ValueRef, ActiveThread, OpaqueValue, Getable, Pushable, UserdataValue};
 use gluon::vm::api::generic::{A, B};
 
-use std::iter;
-use std::sync::*;
-use std::collections::HashSet;
+use std::collections::{HashSet};
 
 type ValueA = OpaqueValue<RootedThread, A>;
 type ValueB = OpaqueValue<RootedThread, B>;
 
 ///
-/// Structs come with some user data
+/// Data passed through the derived state monad
 ///
-#[derive(Userdata, VmType, Trace, Clone, Debug)]
+#[derive(Userdata, VmType, Trace, Debug)]
 #[gluon_trace(skip)]
-#[gluon(vm_type = "flo.computed.DerivedStateDependencies")]
-struct DerivedStateDependencies {
-    dependencies: Arc<HashSet<FloScriptSymbol>>
+#[gluon(vm_type = "flo.computed.prim.DerivedStateData")]
+pub struct DerivedStateData {
+    // The symbols that the last value of this state depended upon
+    dependencies: HashSet<FloScriptSymbol>
 }
 
-impl DerivedStateDependencies {
-    ///
-    /// Creates a new (empty) state dependencies structure
-    ///
-    fn new() -> DerivedStateDependencies {
-        DerivedStateDependencies {
-            dependencies: Arc::new(HashSet::new())
-        }
-    }
-
-    ///
-    /// Creates a new state dependencies structure containing a single dependency ID
-    ///
-    fn with_dependency(dependency: FloScriptSymbol) -> DerivedStateDependencies {
-        DerivedStateDependencies {
-            dependencies: Arc::new(iter::once(dependency).collect())
-        }
-    }
-
-    ///
-    /// Merge these dependencies with the dependencies from another state
-    ///
-    fn merge_with(&mut self, merge_with: &DerivedStateDependencies) {
-        if merge_with.dependencies.len() == 0 {
-            // Nothing to do
-        } else if self.dependencies.len() == 0 {
-            // Just take the dependencies from the other side
-            self.dependencies = Arc::clone(&merge_with.dependencies);
-        } else {
-            // Create a new dependencies collection
-            self.dependencies = if self.dependencies.len() < merge_with.dependencies.len() {
-                // Clone the larger dependency set, then insert from the smaller
-                let mut new_dependencies = (*merge_with.dependencies).clone();
-                for dep in self.dependencies.iter() {
-                    new_dependencies.insert(*dep);
-                }
-
-                Arc::new(new_dependencies)
-            } else {
-                // Clone the larger dependency set, then insert from the smaller
-                let mut new_dependencies = (*self.dependencies).clone();
-                for dep in merge_with.dependencies.iter() {
-                    new_dependencies.insert(*dep);
-                }
-
-                Arc::new(new_dependencies)
-            }
-        }
-    }
-}
+type ResolveFunction<'vm, TValue> = FunctionRef<'vm, fn(UserdataValue<DerivedStateData>) -> (UserdataValue<DerivedStateData>, TValue)>;
 
 ///
 /// Monad representing a state value
@@ -79,82 +29,58 @@ impl DerivedStateDependencies {
 /// A state value carries along with the symbols that were read from. We use this later on to decide
 /// what to re-evaluate when new data arrives via an input stream.
 ///
-#[derive(VmType, Getable, Pushable)]
-pub struct DerivedState<TValue> {
-    /// The value of this state
-    value:          TValue,
-
-    // User data for this state
-    dependencies:   UserdataValue<DerivedStateDependencies>
+#[derive(VmType)]
+pub struct DerivedState<'vm, TValue> {
+    // Function for resolving the value of the monad
+    resolve: ResolveFunction<'vm, TValue>
 }
 
-impl<TValue> DerivedState<TValue> {
+// Gluon's codegen doesn't seem quite up to the job of dealing with a structure with a function in it, so we need to manually implement getable/pushable
+impl<'vm, 'value, TValue> Getable<'vm, 'value> for DerivedState<'vm, TValue> {
+    impl_getable_simple!();
+
+    fn from_value(vm: &'vm Thread, value: Variants<'value>) -> Self {
+        // Fetch the data from the value
+        let data = match value.as_ref() {
+            ValueRef::Data(data)    => data,
+            other                   => panic!("Unexpected value while retrieving DerivedState: {:?}", other)
+        };
+
+        // Read the fields
+        let resolve = data.lookup_field(vm, "resolve").expect("Cannot find the `resolve` field while retrieving DerivedState");
+
+        // Decode into a derived state
+        DerivedState {
+            resolve: ResolveFunction::from_value(vm, resolve)
+        }
+    }
+}
+
+impl<'vm, TValue> Pushable<'vm> for DerivedState<'vm, TValue> {
+    fn push(self, context: &mut ActiveThread<'vm>) -> Result<()> {
+        unimplemented!()
+    }
+}
+
+impl<'vm, TValue> DerivedState<'vm, TValue> {
     ///
     /// Creates a new state that is not dependent on any input states
     ///
-    pub fn new(value: TValue) -> DerivedState<TValue> {
-        DerivedState { 
-            value:          value,
-            dependencies:   UserdataValue(DerivedStateDependencies::new())
-        }
-    }
-
-    ///
-    /// Creates a new state with a single dependency
-    ///
-    pub fn with_dependency(value: TValue, dependency: FloScriptSymbol) -> DerivedState<TValue> {
-        DerivedState { 
-            value:          value,
-            dependencies:   UserdataValue(DerivedStateDependencies::with_dependency(dependency))
-        }        
-    }
-
-    ///
-    /// Merges the dependencies from another state to update this state
-    ///
-    fn merge_dependencies(self, merge_with: UserdataValue<DerivedStateDependencies>) -> DerivedState<TValue> {
-        let mut new_state = self;
-
-        let UserdataValue(ref mut our_dependencies) = new_state.dependencies;
-        let UserdataValue(merge_with)               = merge_with;
-
-        our_dependencies.merge_with(&merge_with);
-
-        new_state
+    pub fn new(value: TValue) -> DerivedState<'vm, TValue> {
+        unimplemented!()
     }
 }
 
 ///
-/// Implementation of flat_map for the State monad
-///
-fn flat_map(mut a: FunctionRef<fn(ValueA) -> DerivedState<ValueB>>, b: DerivedState<ValueA>) -> DerivedState<ValueB> {
-    let value_a = b.value;
-    let deps_a  = b.dependencies;
-    let value_b = a.call(value_a).unwrap();
-
-    value_b.merge_dependencies(deps_a)
-}
-
-///
-/// Wraps a value in a new state
-///
-fn wrap(a: ValueA) -> DerivedState<ValueA> {
-    DerivedState::new(a)
-}
-
-///
-/// Generates the flo.state extern module for a Gluon VM
+/// Generates the flo.computed.prim extern module for a Gluon VM
 ///
 pub fn load(vm: &Thread) -> Result<ExternModule> {
-    vm.register_type::<DerivedStateDependencies>("flo.computed.DerivedStateDependencies", &[])?;
-    vm.register_type::<DerivedState<A>>("flo.computed.DerivedState", &["a"])?;
+    vm.register_type::<DerivedStateData>("flo.computed.prim.DerivedStateData", &[])?;
+    vm.register_type::<DerivedState<A>>("flo.computed.prim.DerivedState", &["a"])?;
 
     ExternModule::new(vm, record! {
         type DerivedState a                 => DerivedState<A>,
-        type DerivedStateDependencies       => DerivedStateDependencies,
-
-        wrap                                => primitive!(1, wrap),
-        flat_map                            => primitive!(2, flat_map)
+        type DerivedStateData               => DerivedStateData
     })
 }
 
@@ -169,11 +95,11 @@ mod test {
     #[test]
     fn make_type_from_derived_state() {
         let vm = new_vm();
-        import::add_extern_module(&vm, "flo.computed", load);
+        import::add_extern_module(&vm, "flo.computed.prim", load);
 
         // Gluon only imports user data types if the corresponding module has previously been imported
         Compiler::default().run_expr::<()>(&vm, "importfs", "import! std.fs\n()").unwrap();
-        Compiler::default().run_expr::<()>(&vm, "importcomputed", "import! flo.computed\n()").unwrap();
+        Compiler::default().run_expr::<()>(&vm, "importcomputed", "import! flo.computed.prim\n()").unwrap();
 
         // IO monad
         let _some_type = IO::<i32>::make_type(&vm);

@@ -41,8 +41,8 @@ pub struct ComputingScriptStream<Item> {
 }
 
 impl<Item> ComputingScriptStream<Item> 
-where   DerivedState<Item>: VmType,
-        Item:               for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static {
+where   for<'vm> DerivedState<'vm, Item>:   VmType,
+        Item:                               for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static {
     ///
     /// Creates a new computing thread that reads from the specified symbol
     ///
