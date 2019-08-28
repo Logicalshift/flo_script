@@ -49,6 +49,20 @@ impl DerivedStateData {
     }
 
     ///
+    /// Retrieves the namespace for this state
+    ///
+    pub fn get_namespace(&self) -> Arc<Desync<GluonScriptNamespace>> {
+        Arc::clone(&self.namespace)
+    }
+
+    ///
+    /// Returns true if this state has an active stream for the specified symbol
+    ///
+    pub fn has_stream(&self, symbol: FloScriptSymbol) -> bool {
+        self.active_streams.contains_key(&symbol)
+    }
+
+    ///
     /// Polls the stream for the specified symbol (returning None if the stream is not running)
     ///
     pub fn poll_stream<TStreamItem: 'static>(&mut self, symbol: FloScriptSymbol) -> Option<Poll<Option<TStreamItem>, ()>> {
@@ -72,8 +86,7 @@ impl DerivedStateData {
     ///
     /// Sets the stream for reading the specified symbol
     ///
-    pub fn set_stream<TStream>(&mut self, symbol: FloScriptSymbol, stream: Box<TStream>)
-    where TStream: 'static+Stream<Error=()>+Send {
+    pub fn set_stream<TStreamItem: 'static>(&mut self, symbol: FloScriptSymbol, stream: Box<dyn Stream<Item=TStreamItem, Error=()>+Send>) {
         // Store the stream in a StreamRef (this is used so we can cast it back via Any: annoyingly we end up with a box in a box here)
         let stream = StreamRef(stream);
 

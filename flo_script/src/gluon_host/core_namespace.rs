@@ -1,5 +1,6 @@
 use super::computing_script::*;
 use super::derived_state;
+use super::derived_state::{DerivedStateData};
 use super::super::streams::*;
 use super::super::symbol::*;
 use super::super::error::*;
@@ -9,6 +10,8 @@ use gluon::*;
 use gluon::compiler_pipeline::{Compileable};
 use gluon::vm::api::{VmType, Getable};
 use futures::*;
+use futures::future;
+use futures::sync::oneshot;
 
 use std::any::*;
 use std::sync::*;
@@ -81,6 +84,66 @@ impl GluonScriptNamespace {
         let source = InputStreamSource::new(input_stream_type);
 
         self.symbols.insert(symbol, SymbolDefinition::Input(source));
+    }
+
+    ///
+    /// Creates the 'resolve' function for the DerivedState for a symbol a namespace
+    ///
+    pub fn create_derived_state_resolve<Symbol: 'static+Clone+Send>(symbol: FloScriptSymbol) -> impl Fn(DerivedStateData) -> Box<dyn Future<Item=(DerivedStateData, Symbol), Error=()>> 
+    where   Symbol:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
+    <Symbol as VmType>::Type:   Sized {
+        move |state_data| {
+            // Poll for the stream if it's not available
+            let mut future_stream   = if !state_data.has_stream(symbol)  {
+                let namespace       = state_data.get_namespace();
+                let future_stream   = namespace.future(move |namespace| namespace.read_state_stream::<Symbol>(symbol));
+                let future_stream: Box<dyn Future<Item=FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>>, Error=oneshot::Canceled>> = Box::new(future_stream); // here is a place Rust's type inference lets us down :-(
+                Some(future_stream)
+            } else {
+                None
+            };
+
+            // We own the state data until we return a result
+            let mut state_data      = Some(state_data);
+
+            Box::new(future::poll_fn(move || {
+                let current_state = state_data.as_mut().unwrap();
+
+                loop {
+                    if let Some(actual_future_stream) = future_stream.as_mut() {
+
+                        // Trying to retrieve the stream: poll that first
+                        match actual_future_stream.poll() {
+                            Ok(Async::NotReady)             => { return Ok(Async::NotReady); },
+                            Err(_)                          => { return Err(()); },
+                            Ok(Async::Ready(Err(_)))        => { return Err(()); },
+                            Ok(Async::Ready(Ok(stream)))    => {
+                                // Stream retrieved: set it and start again
+                                current_state.set_stream(symbol, stream);
+                                future_stream = None;
+                            }
+                        }
+
+                    } else if let Some(result) = current_state.poll_stream::<Symbol>(symbol) {
+
+                        // The stream is currently active for this symbol
+                        return match result {
+                            Ok(Async::Ready(Some(result)))  => Ok(Async::Ready((state_data.take().unwrap(), result))),
+                            Ok(Async::Ready(None))          => Ok(Async::NotReady),
+                            Ok(Async::NotReady)             => Ok(Async::NotReady),
+                            Err(err)                        => Err(err)
+                        };
+
+                    } else {
+
+                        // The stream is not active for this symbol: start polling for it (again)
+                        let namespace   = current_state.get_namespace();
+                        future_stream   = Some(Box::new(namespace.future(move |namespace| namespace.read_state_stream::<Symbol>(symbol))));
+
+                    }
+                }
+            }))
+        }
     }
 
     ///
