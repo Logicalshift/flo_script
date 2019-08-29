@@ -5,6 +5,7 @@ mod editor;
 mod notebook;
 mod derived_state;
 mod computing_script;
+mod dynamic_record;
 
 pub use self::host::*;
 pub use self::editor::*;
