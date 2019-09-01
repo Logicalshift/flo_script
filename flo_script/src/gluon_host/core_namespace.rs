@@ -8,6 +8,7 @@ use super::super::error::*;
 use desync::Desync;
 use gluon::*;
 use gluon::compiler_pipeline::{Compileable};
+use gluon::vm::{ExternModule};
 use gluon::vm::api::{VmType, Getable};
 use futures::*;
 use futures::future;
@@ -15,7 +16,8 @@ use futures::sync::oneshot;
 
 use std::any::*;
 use std::sync::*;
-use std::collections::HashMap;
+use std::collections::{HashMap};
+use std::result::{Result};
 
 ///
 /// Possible definitions of a symbol in the namespace
@@ -43,6 +45,7 @@ enum SymbolDefinition {
 ///
 #[derive(Clone)]
 pub struct GluonScriptNamespace {
+    /// The definitions for the symbols in this namespace
     symbols: HashMap<FloScriptSymbol, SymbolDefinition>,
 
     /// The current thread for generating streaming scripts (or none if it hasn't been created yet)
@@ -84,6 +87,13 @@ impl GluonScriptNamespace {
         let source = InputStreamSource::new(input_stream_type);
 
         self.symbols.insert(symbol, SymbolDefinition::Input(source));
+    }
+
+    ///
+    /// Loads the 'flo.state.resolve' module for a namespace
+    ///
+    pub fn load_state_resolve_module(namespace: &GluonScriptNamespace, thread: &Thread) -> Result<ExternModule, gluon::vm::Error> {
+        unimplemented!()
     }
 
     ///

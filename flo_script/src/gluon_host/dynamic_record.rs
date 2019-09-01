@@ -1,6 +1,8 @@
 use gluon::vm::*;
 use gluon::vm::api::*;
 
+// TODO: to use this, we need an implementation of VmType, which seems impossible at the moment (as we can't bind to a single Rust type)
+
 ///
 /// Represents a dynamic record
 /// 
