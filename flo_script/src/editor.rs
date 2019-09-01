@@ -1,10 +1,9 @@
 use super::symbol::*;
+use super::script_type_description::*;
 
 use futures::*;
 use futures::stream;
 use futures::executor;
-
-use std::any::*;
 
 ///
 /// Represents an edit to a script
@@ -18,7 +17,7 @@ pub enum ScriptEdit {
     UndefineSymbol(FloScriptSymbol),
 
     /// Specifies that a particular symbol is used for input and receives values of the specified type 
-    SetInputType(FloScriptSymbol, TypeId),
+    SetInputType(FloScriptSymbol, ScriptTypeDescription),
 
     /// Specifies that a particular symbol is used as a script, and the contents of the script that it should evaluate
     /// 
@@ -80,7 +79,7 @@ pub trait FloScriptEditor : Send+Sync {
     ///
     /// Sets the type of the data sent to a particular input symbol
     ///
-    fn set_input_type<InputType: 'static>(&self, input_symbol: FloScriptSymbol) { self.edit(ScriptEdit::SetInputType(input_symbol, TypeId::of::<InputType>())); }
+    fn set_input_type<InputType: ScriptType>(&self, input_symbol: FloScriptSymbol) { self.edit(ScriptEdit::SetInputType(input_symbol, InputType::description())); }
 
     ///
     /// Defines a streaming script, which will produce an output stream on the specified symbol

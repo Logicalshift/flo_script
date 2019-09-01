@@ -1,6 +1,7 @@
 use super::computing_script::*;
 use super::derived_state;
 use super::derived_state::{DerivedStateData};
+use super::super::script_type_description::*;
 use super::super::streams::*;
 use super::super::symbol::*;
 use super::super::error::*;
@@ -83,7 +84,7 @@ impl GluonScriptNamespace {
     ///
     /// Defines a particular symbol to be an input stream
     ///
-    pub fn define_input_symbol(&mut self, symbol: FloScriptSymbol, input_stream_type: TypeId) {
+    pub fn define_input_symbol(&mut self, symbol: FloScriptSymbol, input_stream_type: ScriptTypeDescription) {
         let source = InputStreamSource::new(input_stream_type);
 
         self.symbols.insert(symbol, SymbolDefinition::Input(source));
@@ -99,7 +100,7 @@ impl GluonScriptNamespace {
     ///
     /// Creates the 'resolve' function for the DerivedState for a symbol a namespace
     ///
-    pub fn create_derived_state_resolve<Symbol: 'static+Clone+Send>(symbol: FloScriptSymbol) -> impl Fn(DerivedStateData) -> Box<dyn Future<Item=(DerivedStateData, Symbol), Error=()>> 
+    pub fn create_derived_state_resolve<Symbol: 'static+ScriptType>(symbol: FloScriptSymbol) -> impl Fn(DerivedStateData) -> Box<dyn Future<Item=(DerivedStateData, Symbol), Error=()>> 
     where   Symbol:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <Symbol as VmType>::Type:   Sized {
         move |state_data| {
@@ -159,7 +160,7 @@ impl GluonScriptNamespace {
     ///
     /// Creates a stream to read from a particular symbol
     ///
-    pub fn read_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>>
+    pub fn read_stream<Symbol: 'static+ScriptType>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>>
     where   Symbol:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <Symbol as VmType>::Type:   Sized {
         use self::SymbolDefinition::*;
@@ -177,7 +178,7 @@ impl GluonScriptNamespace {
     ///
     /// Creates a stream to read from a particular symbol using the state stream semantics
     ///
-    pub fn read_state_stream<Symbol: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> 
+    pub fn read_state_stream<Symbol: 'static+ScriptType>(&mut self, symbol: FloScriptSymbol) -> FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>> 
     where   Symbol:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <Symbol as VmType>::Type:   Sized {
         use self::SymbolDefinition::*;
@@ -195,7 +196,7 @@ impl GluonScriptNamespace {
     ///
     /// Creates a new computing stream from a script, storing the result as a new input stream associated with the specified symbol
     ///
-    pub fn create_computing_stream<Item: 'static+Clone+Send>(&mut self, symbol: FloScriptSymbol, expression: Arc<String>) -> FloScriptResult<impl Stream<Item=Item, Error=()>>
+    pub fn create_computing_stream<Item: 'static+ScriptType>(&mut self, symbol: FloScriptSymbol, expression: Arc<String>) -> FloScriptResult<impl Stream<Item=Item, Error=()>>
     where Item:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
     <Item as VmType>::Type: Sized {
         let computing_thread    = self.get_computing_thread();
@@ -209,7 +210,7 @@ impl GluonScriptNamespace {
                 let stream = ComputingScriptStream::<Item>::new(computing_thread, compiled, Compiler::default())?;
 
                 // This will become the input stream for the specified symbol
-                let mut input_stream_source = InputStreamSource::new(TypeId::of::<Item>());
+                let mut input_stream_source = InputStreamSource::new(Item::description());
                 input_stream_source.attach(stream)?;
 
                 // The output is read as a state stream from this input
@@ -238,7 +239,7 @@ impl GluonScriptNamespace {
     /// Attaches an input stream to a particular symbol
     ///
     pub fn attach_input<InputStream: 'static+Stream<Error=()>+Send>(&mut self, symbol: FloScriptSymbol, input: InputStream) -> FloScriptResult<()> 
-    where InputStream::Item: 'static+Clone+Send {
+    where InputStream::Item: 'static+ScriptType {
         use self::SymbolDefinition::*;
 
         match self.symbols.get_mut(&symbol) {
