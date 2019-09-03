@@ -1,9 +1,19 @@
+use super::error::*;
+use super::symbol::*;
+use super::gluon_host::derived_state::*;
+
+use gluon::vm;
+use gluon::vm::thread::{Thread};
+use gluon::vm::ExternModule;
+use gluon::vm::api::{VmType, Pushable, Getable};
+use futures::*;
+use futures::sync::oneshot;
+
 use std::any::{Any, TypeId};
 use std::fmt;
 use std::fmt::{Debug};
 use std::result;
-
-use gluon_vm::api::{VmType, Pushable, Getable};
+use std::sync::*;
 
 ///
 /// Provides a description for a type that can be used when streaming from a script
@@ -11,7 +21,10 @@ use gluon_vm::api::{VmType, Pushable, Getable};
 #[derive(Clone)]
 pub struct ScriptTypeDescription {
     /// The ID of this type so it can be compared to others
-    type_id: TypeId
+    type_id: TypeId,
+
+    /// Creates an extern module loader for the 'resolve' function of a derived state of this type
+    derived_state_resolve: Arc<dyn Fn(FloScriptSymbol) -> Box<dyn FnMut(&Thread) -> vm::Result<ExternModule> + Send + 'static>+Send+Sync>
 }
 
 impl ScriptTypeDescription {
@@ -48,8 +61,83 @@ pub trait ScriptType : Any+Clone+Send {
 impl<T> ScriptType for T 
 where for<'vm, 'value> T: Any+VmType+Getable<'vm, 'value>+Pushable<'vm>+Clone+Send {
     fn description() -> ScriptTypeDescription {
+        let type_id                 = TypeId::of::<T>();
+        let derived_state_resolve   = Arc::new(|symbol| {
+            let fun: Box<dyn FnMut(&Thread) -> vm::Result<ExternModule> + Send + 'static> = Box::new(move |thread| {
+                ExternModule::new(thread, primitive!(0, || { 0 }))
+            });
+            fun
+        });
+
         ScriptTypeDescription {
-            type_id: TypeId::of::<T>()
+            type_id,
+            derived_state_resolve
         }
     }
+}
+
+
+//
+// Gluon-specific things
+// 
+// (I'd really like to move these elsewhere so we can support multiple scripting languages more easily but for now we'll limit ourselves
+// to Gluon as I'm not sure there's any way of doing this without specialization of some kind)
+// 
+
+///
+/// Creates the 'resolve' function for the DerivedState for a symbol a namespace
+///
+fn derived_state_resolve<Symbol: 'static+ScriptType>(symbol: FloScriptSymbol, state_data: DerivedStateData) -> impl Future<Item=(DerivedStateData, Symbol), Error=()>+Send
+where   Symbol:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
+<Symbol as VmType>::Type:   Sized {
+    // Poll for the stream if it's not available
+    let mut future_stream   = if !state_data.has_stream(symbol)  {
+        let namespace       = state_data.get_namespace();
+        let future_stream   = namespace.future(move |namespace| namespace.read_state_stream::<Symbol>(symbol));
+        let future_stream: Box<dyn Future<Item=FloScriptResult<Box<dyn Stream<Item=Symbol, Error=()>+Send>>, Error=oneshot::Canceled>+Send> = Box::new(future_stream); // here is a place Rust's type inference lets us down :-(
+        Some(future_stream)
+    } else {
+        None
+    };
+
+    // We own the state data until we return a result
+    let mut state_data      = Some(state_data);
+
+    future::poll_fn(move || {
+        let current_state = state_data.as_mut().unwrap();
+
+        loop {
+            if let Some(actual_future_stream) = future_stream.as_mut() {
+
+                // Trying to retrieve the stream: poll that first
+                match actual_future_stream.poll() {
+                    Ok(Async::NotReady)             => { return Ok(Async::NotReady); },
+                    Err(_)                          => { return Err(()); },
+                    Ok(Async::Ready(Err(_)))        => { return Err(()); },
+                    Ok(Async::Ready(Ok(stream)))    => {
+                        // Stream retrieved: set it and start again
+                        current_state.set_stream(symbol, stream);
+                        future_stream = None;
+                    }
+                }
+
+            } else if let Some(result) = current_state.poll_stream::<Symbol>(symbol) {
+
+                // The stream is currently active for this symbol
+                return match result {
+                    Ok(Async::Ready(Some(result)))  => Ok(Async::Ready((state_data.take().unwrap(), result))),
+                    Ok(Async::Ready(None))          => Ok(Async::NotReady),
+                    Ok(Async::NotReady)             => Ok(Async::NotReady),
+                    Err(err)                        => Err(err)
+                };
+
+            } else {
+
+                // The stream is not active for this symbol: start polling for it (again)
+                let namespace   = current_state.get_namespace();
+                future_stream   = Some(Box::new(namespace.future(move |namespace| namespace.read_state_stream::<Symbol>(symbol))));
+
+            }
+        }
+    })
 }

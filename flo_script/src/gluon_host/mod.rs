@@ -3,7 +3,7 @@ mod core_namespace;
 mod host;
 mod editor;
 mod notebook;
-mod derived_state;
+pub (crate) mod derived_state;
 mod computing_script;
 mod dynamic_record;
 

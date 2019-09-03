@@ -63,6 +63,15 @@ impl FloScriptSymbol {
     }
 
     ///
+    /// Returns the symbol with the specified ID (the ID must previously have been returned by `id()`)
+    ///
+    pub fn with_id(id: u64) -> FloScriptSymbol {
+        FloScriptSymbol {
+            id: id
+        }
+    }
+
+    ///
     /// Retrieves the name of this symbol, if it's a named symbol
     ///
     pub fn name(&self) -> Option<String> {
