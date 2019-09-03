@@ -4,9 +4,9 @@ use super::gluon_host::derived_state::*;
 
 use gluon::{Compiler};
 use gluon::vm;
-use gluon::vm::thread::{Thread};
+use gluon::vm::thread::{RootedThread, Thread};
 use gluon::vm::ExternModule;
-use gluon::vm::api::{UserdataValue, FunctionRef, Primitive, VmType, Pushable, Getable};
+use gluon::vm::api::{UserdataValue, Function, FunctionRef, Primitive, VmType, Pushable, Getable, FutureResult};
 use futures::*;
 use futures::sync::oneshot;
 
@@ -64,6 +64,7 @@ where   for<'vm, 'value> T: Any+VmType+Getable<'vm, 'value>+Pushable<'vm>+Sized+
         T::Type : Sized {
     fn description() -> ScriptTypeDescription {
         let type_id                 = TypeId::of::<T>();
+        let state_resolver          = userdata_derived_state_resolve::<T>;
         let derived_state_resolve   = Arc::new(move |symbol: FloScriptSymbol| {
             // Can't pass symbols directly to gluon at the moment, so get the ID
             let symbol_id = symbol.id();
@@ -71,7 +72,10 @@ where   for<'vm, 'value> T: Any+VmType+Getable<'vm, 'value>+Pushable<'vm>+Sized+
             let fun: Box<dyn FnMut(&Thread) -> vm::Result<ExternModule> + Send + 'static> = Box::new(move |thread| {
                 let mut compiler = Compiler::default();
 
-                let resolve_fn: FunctionRef<fn(Primitive<fn(u64, UserdataValue<DerivedStateData>) -> (UserdataValue<DerivedStateData>, T)>, u64) -> FunctionRef<'static, fn(UserdataValue<DerivedStateData>) -> (UserdataValue<DerivedStateData>, T)> > = compiler.run_expr(thread, "foo", r#"\resolve symbol_id -> resolve symbol_id"#).unwrap().0;
+                let state_resolver = primitive!(2, state_resolver);
+                let resolve_fn: FunctionRef<fn(Primitive<fn(u64, UserdataValue<DerivedStateData>) -> (UserdataValue<DerivedStateData>, T)>, u64) -> Function<RootedThread, fn(UserdataValue<DerivedStateData>) -> (UserdataValue<DerivedStateData>, T)> > = compiler.run_expr(thread, "foo", r#"\resolve symbol_id -> resolve symbol_id"#).unwrap().0;
+
+                // let resolve = resolve_fn.call(state_resolver, symbol_id);
 
                 ExternModule::new(thread, primitive!(0, || { 0 }))
             });
@@ -95,14 +99,17 @@ where   for<'vm, 'value> T: Any+VmType+Getable<'vm, 'value>+Pushable<'vm>+Sized+
 ///
 /// Variant of derived_state_resolve that uses the gluon UserdataValue struct
 ///
-fn userdata_derived_state_resolve<Symbol: 'static+ScriptType>(symbol_id: u64, state_data: UserdataValue<DerivedStateData>) -> impl Future<Item=(UserdataValue<DerivedStateData>, Symbol), Error=()>+Send
+fn userdata_derived_state_resolve<Symbol: 'static+ScriptType>(symbol_id: u64, state_data: UserdataValue<DerivedStateData>) -> FutureResult<impl Future<Item=(UserdataValue<DerivedStateData>, Symbol), Error=vm::Error>+Send>
 where   Symbol:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
 <Symbol as VmType>::Type:   Sized {
     let symbol                      = FloScriptSymbol::with_id(symbol_id);
     let UserdataValue(state_data)   = state_data;
 
     let resolved                    = derived_state_resolve(symbol, state_data);
-    resolved.map(|(state, symbol)| (UserdataValue(state), symbol))
+    let resolved                    = resolved.map(|(state, symbol)| (UserdataValue(state), symbol));
+    let resolved                    = resolved.map_err(|_| vm::Error::Dead);
+
+    FutureResult(resolved)
 }
 
 ///

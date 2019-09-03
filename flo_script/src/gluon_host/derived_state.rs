@@ -36,6 +36,13 @@ pub struct DerivedStateData {
 /// Container type used so we can use 'Any' to get the stream of the appropriate type
 struct StreamRef<TItem>(Box<dyn Stream<Item=TItem, Error=()>+Send>);
 
+impl Clone for DerivedStateData {
+    fn clone(&self) -> DerivedStateData {
+        // TODO: active_streams?
+        unimplemented!()
+    }
+}
+
 impl DerivedStateData {
     ///
     /// Creates an entirely new blank derived state data object
