@@ -2,10 +2,11 @@ use super::error::*;
 use super::symbol::*;
 use super::gluon_host::derived_state::*;
 
+use gluon::{Compiler};
 use gluon::vm;
 use gluon::vm::thread::{Thread};
 use gluon::vm::ExternModule;
-use gluon::vm::api::{VmType, Pushable, Getable};
+use gluon::vm::api::{UserdataValue, FunctionRef, Primitive, VmType, Pushable, Getable};
 use futures::*;
 use futures::sync::oneshot;
 
@@ -59,11 +60,19 @@ pub trait ScriptType : Any+Clone+Send {
 }
 
 impl<T> ScriptType for T 
-where for<'vm, 'value> T: Any+VmType+Getable<'vm, 'value>+Pushable<'vm>+Clone+Send {
+where   for<'vm, 'value> T: Any+VmType+Getable<'vm, 'value>+Pushable<'vm>+Sized+Clone+Send,
+        T::Type : Sized {
     fn description() -> ScriptTypeDescription {
         let type_id                 = TypeId::of::<T>();
-        let derived_state_resolve   = Arc::new(|symbol| {
+        let derived_state_resolve   = Arc::new(move |symbol: FloScriptSymbol| {
+            // Can't pass symbols directly to gluon at the moment, so get the ID
+            let symbol_id = symbol.id();
+
             let fun: Box<dyn FnMut(&Thread) -> vm::Result<ExternModule> + Send + 'static> = Box::new(move |thread| {
+                let mut compiler = Compiler::default();
+
+                let resolve_fn: FunctionRef<fn(Primitive<fn(u64, UserdataValue<DerivedStateData>) -> (UserdataValue<DerivedStateData>, T)>, u64) -> FunctionRef<'static, fn(UserdataValue<DerivedStateData>) -> (UserdataValue<DerivedStateData>, T)> > = compiler.run_expr(thread, "foo", r#"\resolve symbol_id -> resolve symbol_id"#).unwrap().0;
+
                 ExternModule::new(thread, primitive!(0, || { 0 }))
             });
             fun
@@ -76,13 +85,25 @@ where for<'vm, 'value> T: Any+VmType+Getable<'vm, 'value>+Pushable<'vm>+Clone+Se
     }
 }
 
-
 //
 // Gluon-specific things
 // 
 // (I'd really like to move these elsewhere so we can support multiple scripting languages more easily but for now we'll limit ourselves
 // to Gluon as I'm not sure there's any way of doing this without specialization of some kind)
 // 
+
+///
+/// Variant of derived_state_resolve that uses the gluon UserdataValue struct
+///
+fn userdata_derived_state_resolve<Symbol: 'static+ScriptType>(symbol_id: u64, state_data: UserdataValue<DerivedStateData>) -> impl Future<Item=(UserdataValue<DerivedStateData>, Symbol), Error=()>+Send
+where   Symbol:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Send + 'static,
+<Symbol as VmType>::Type:   Sized {
+    let symbol                      = FloScriptSymbol::with_id(symbol_id);
+    let UserdataValue(state_data)   = state_data;
+
+    let resolved                    = derived_state_resolve(symbol, state_data);
+    resolved.map(|(state, symbol)| (UserdataValue(state), symbol))
+}
 
 ///
 /// Creates the 'resolve' function for the DerivedState for a symbol a namespace
@@ -140,4 +161,14 @@ where   Symbol:             for<'vm, 'value> Getable<'vm, 'value> + VmType + Sen
             }
         }
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn create_i32_type_description() {
+        let _t: ScriptTypeDescription = i32::description();
+    }
 }
