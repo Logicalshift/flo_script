@@ -495,7 +495,7 @@ dependencies = [
  "pretty 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "quick-error 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "typed-arena 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "typed-arena 1.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -651,7 +651,7 @@ name = "pretty"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "typed-arena 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "typed-arena 1.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "typed-arena"
-version = "1.5.0"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -1220,7 +1220,7 @@ dependencies = [
 "checksum term 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "edd106a334b7657c10b7c540a0106114feadeb4dc314513e97df481d5d966f42"
 "checksum termcolor 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)" = "96d6098003bde162e4277c70665bd87c326f5a0c3f3fbfb285787fa482d54e6e"
 "checksum thread_local 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "c6b53e329000edc2b34dbe8545fd20e55a333362d0a321909685a19bd28c3f1b"
-"checksum typed-arena 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7f70f5c346cc11bc044ae427ab2feae213350dca9e2d637047797d5ff316a646"
+"checksum typed-arena 1.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0e870b3bad29e7b9b8a4720514df8bbf63bd676b6504b89ea5a08797f3e9ed59"
 "checksum typenum 1.11.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6d2783fe2d6b8c1101136184eb41be8b1ad379e4657050b8aaff0c79ee7575f9"
 "checksum unicode-xid 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fc72304796d0818e357ead4e000d19c9c174ab23dc11093ac919054d20a6a7fc"
 "checksum unicode-xid 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "826e7639553986605ec5979c7dd957c7895e93eabed50ab2ffa7f6128a75097c"

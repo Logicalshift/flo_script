@@ -70,6 +70,7 @@ where   for<'vm, 'value> T: Any+VmType+Getable<'vm, 'value>+Pushable<'vm>+Sized+
             let symbol_id = symbol.id();
 
             let fun: Box<dyn FnMut(&Thread) -> vm::Result<ExternModule> + Send + 'static> = Box::new(move |thread| {
+                /*
                 let mut compiler = Compiler::default();
 
                 let state_resolver = primitive!(2, state_resolver);
@@ -78,6 +79,8 @@ where   for<'vm, 'value> T: Any+VmType+Getable<'vm, 'value>+Pushable<'vm>+Sized+
                 // let resolve = resolve_fn.call(state_resolver, symbol_id);
 
                 ExternModule::new(thread, primitive!(0, || { 0 }))
+                */
+                unimplemented!()
             });
             fun
         });
